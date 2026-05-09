@@ -144,34 +144,36 @@ export default function Payments() {
           const price = num(item?.price || 0);
           const qty = num(item?.qty || 0);
           const itemName = item?.nameEn || item?.nameUrdu || item?.name || "-";
+          const isUrduItem = !!item?.nameUrdu;
+          const itemAlign = isUrduItem ? "right" : "left";
+          const itemDirection = isUrduItem ? "rtl" : "ltr";
 
           return `
             <tr style="border-bottom: 1px dashed #ccc;">
-              <td class="urdu-text" style="
-                padding: 4px 0;
+              <td class="item-cell" style="
                 vertical-align: top;
-                font-size: 14px;
+                font-size: 12px;
                 color: #000;
-                width: 75%;
-                line-height: 1.4;
+                width: 58%;
+                line-height: 1.3;
+                direction: ${itemDirection};
+                text-align: ${itemAlign};
               ">
                 ${itemName}
               </td>
-              <td style="
-                padding: 4px 0;
+              <td class="qty-cell" style="
                 text-align: right;
                 vertical-align: top;
-                font-size: 10px;
+                font-size: 11px;
                 color: #000;
-                width: 8%;
+                width: 16%;
               ">${qty}</td>
-              <td style="
-                padding: 4px 0;
+              <td class="rate-cell" style="
                 text-align: right;
                 vertical-align: top;
-                font-size: 10px;
+                font-size: 11px;
                 color: #000;
-                width: 17%;
+                width: 26%;
               ">${price.toLocaleString()}</td>
             </tr>`;
         })
@@ -179,7 +181,7 @@ export default function Payments() {
 
       // ── Invoice HTML ──
       const invoiceHTML = `
-        <div style="width: 280px; padding: 10px; background: #ffffff; color: #000000; font-family: Arial, sans-serif; box-sizing: border-box; margin: 0 auto;">
+        <div style="width: 320px; padding: 10px; background: #ffffff; color: #000000; font-family: Arial, sans-serif; box-sizing: border-box; margin: 0 auto;">
           
           <!-- STORE HEADER -->
           <div style="text-align: center; padding-bottom: 10px;">
@@ -209,12 +211,12 @@ export default function Payments() {
           <div style="border-top: 1px solid #000; margin: 8px 0;"></div>
 
           <!-- ITEMS TABLE -->
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">
+          <table style="width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 10px;">
             <thead>
               <tr style="border-bottom: 1px solid #000;">
-                <th style="padding: 4px 0; text-align: left; font-size: 11px; font-weight: bold; width: 75%;">Item</th>
-                <th style="padding: 4px 0; text-align: right; font-size: 11px; font-weight: bold; width: 8%;">Qty</th>
-                <th style="padding: 4px 0; text-align: right; font-size: 11px; font-weight: bold; width: 17%;">Rate</th>
+                <th style="padding: 4px 0; text-align: left; font-size: 11px; font-weight: bold; width: 58%;">Item</th>
+                <th style="padding: 4px 0; text-align: right; font-size: 11px; font-weight: bold; width: 16%;">Qty</th>
+                <th style="padding: 4px 0; text-align: right; font-size: 11px; font-weight: bold; width: 26%;">Rate</th>
               </tr>
             </thead>
             <tbody>
@@ -266,10 +268,16 @@ export default function Payments() {
       );
       printWindow.document.write("<style>");
       printWindow.document.write(
-        "body { font-family: Arial, sans-serif; margin: 0; padding: 15px; }"
+        "@page { size: auto; margin: 5mm; } body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #fff; color: #000; }"
       );
       printWindow.document.write(
-        ".urdu-text { font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif; direction: rtl; unicode-bidi: embed; text-align: right; display: block; }"
+        "table { width: 100%; border-collapse: collapse; table-layout: fixed; } th, td { padding: 4px 2px; }"
+      );
+      printWindow.document.write(
+        "th { font-size: 11px; font-weight: bold; } td { font-size: 11px; }"
+      );
+      printWindow.document.write(
+        ".item-cell { word-break: break-word; white-space: normal; } .qty-cell, .rate-cell { white-space: nowrap; }"
       );
       printWindow.document.write("</style>");
       printWindow.document.write("</head><body>");

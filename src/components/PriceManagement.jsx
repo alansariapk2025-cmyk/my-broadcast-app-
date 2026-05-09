@@ -331,7 +331,7 @@ export default function PriceManagement() {
     fetchProducts(false);
   };
 
-  const exportData = (type) => {
+  const exportData = async (type) => {
     const data = (type === "all" ? products : filtered).map((p, i) => ({
       "S.No": i + 1,
       "Name (EN)": p.nameEn || "",
@@ -345,10 +345,15 @@ export default function PriceManagement() {
       Status: p.status || "active",
       Stock: num(p.stock || 0),
     }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Prices");
-    XLSX.writeFile(wb, `prices_${type}_${new Date().toISOString().split("T")[0]}.xlsx`);
+    const wb = new Excel.Workbook();
+    const ws = wb.addWorksheet("Prices");
+    if (data.length > 0) {
+      ws.columns = Object.keys(data[0]).map(k => ({ header: k, key: k }));
+      data.forEach(row => ws.addRow(row));
+    }
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: "application/octet-stream" });
+    saveAs(blob, `prices_${type}_${new Date().toISOString().split("T")[0]}.xlsx`);
     toast.success(`Exported ${data.length} products!`);
   };
 

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { collection, collectionGroup, getDocs, updateDoc, deleteDoc, doc, writeBatch, serverTimestamp, query, orderBy, limit, startAfter } from "firebase/firestore";
 import { db } from "../firebase";
 import toast, { Toaster } from "react-hot-toast";
-import { FaEdit, FaSave, FaTimes, FaBox, FaTrash, FaSearch, FaChevronLeft, FaChevronRight, FaFilter, FaSortAmountDown, FaSortAmountUp, FaCheckCircle, FaDownload, FaSync, FaList, FaThLarge, FaImage, FaToggleOn, FaToggleOff, FaChartBar, FaRupeeSign, FaCubes, FaFire, FaFileExcel, FaFileCsv, FaCloudDownloadAlt, FaCloudUploadAlt, FaCheckDouble, FaBan, FaStar, FaRegStar, FaWarehouse, FaExclamationTriangle, FaWifi } from "react-icons/fa";
+import { FaEdit, FaSave, FaTimes, FaBox, FaTrash, FaSearch, FaChevronLeft, FaChevronRight, FaFilter, FaSortAmountDown, FaSortAmountUp, FaCheckCircle, FaDownload, FaSync, FaList, FaThLarge, FaImage, FaToggleOn, FaToggleOff, FaChartBar, FaRupeeSign, FaCubes, FaFire, FaFileExcel, FaFileCsv, FaCloudDownloadAlt, FaCloudUploadAlt, FaCheckDouble, FaBan, FaStar, FaRegStar, FaWarehouse, FaExclamationTriangle, FaWifi, FaTag } from "react-icons/fa";
 import { Workbook } from "exceljs";
 import { saveAs } from "file-saver";
 
@@ -35,9 +35,9 @@ export default function ProductList() {
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [priceRange, setPriceRange] = useState({ min: "", max: "" });
   const [stockFilter, setStockFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [discountFilter, setDiscountFilter] = useState("");
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("desc");
   const [showFilters, setShowFilters] = useState(false);
@@ -127,11 +127,11 @@ export default function ProductList() {
       list = list.filter(p => (p.nameEn || "").toLowerCase().includes(t) || (p.nameUr || "").toLowerCase().includes(t) || (p.categoryName || "").toLowerCase().includes(t) || (p.sku || "").toLowerCase().includes(t));
     }
 
-    if (priceRange.min) list = list.filter(p => num(p.price) >= num(priceRange.min));
-    if (priceRange.max) list = list.filter(p => num(p.price) <= num(priceRange.max));
     if (stockFilter === "instock") list = list.filter(p => num(p.stock) > 0);
     else if (stockFilter === "outofstock") list = list.filter(p => num(p.stock) === 0);
     else if (stockFilter === "lowstock") list = list.filter(p => num(p.stock) > 0 && num(p.stock) < 10);
+
+    if (discountFilter === "discounted") list = list.filter(p => num(p.discount) > 0);
 
     list.sort((a, b) => {
       let av, bv;
@@ -144,7 +144,7 @@ export default function ProductList() {
     });
 
     return list;
-  }, [allProducts, selectedCategory, statusFilter, searchTerm, priceRange, stockFilter, sortBy, sortOrder]);
+  }, [allProducts, selectedCategory, statusFilter, searchTerm, stockFilter, discountFilter, sortBy, sortOrder]);
 
   const stats = useMemo(() => ({
     total: filteredProducts.length,
@@ -157,13 +157,13 @@ export default function ProductList() {
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const paginated = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
-  const hasFilters = searchTerm || selectedCategory || priceRange.min || priceRange.max || stockFilter || statusFilter;
+  const hasFilters = searchTerm || selectedCategory || stockFilter || statusFilter || discountFilter;
   const mainCategories = useMemo(() => Object.values(categoriesMap).filter(c => !c.parentId), [categoriesMap]);
 
-  useEffect(() => { setPage(1); }, [selectedCategory, statusFilter, searchTerm, stockFilter, sortBy, sortOrder, pageSize, priceRange.min, priceRange.max]);
+  useEffect(() => { setPage(1); }, [selectedCategory, statusFilter, discountFilter, searchTerm, stockFilter, sortBy, sortOrder, pageSize]);
 
   const clearFilters = () => {
-    setSearchTerm(""); setSelectedCategory(""); setPriceRange({ min: "", max: "" }); setStockFilter(""); setStatusFilter(""); setPage(1);
+    setSearchTerm(""); setSelectedCategory(""); setStockFilter(""); setStatusFilter(""); setDiscountFilter(""); setPage(1);
     toast.success("Filters cleared");
   };
 
@@ -270,7 +270,7 @@ export default function ProductList() {
   const exportData = async (type, format) => {
     const data = (type === "all" ? allProducts : filteredProducts).map(p => ({
       "Name (EN)": p.nameEn || "", "Name (UR)": p.nameUr || "", Category: p.categoryName || "", "Price (PKR)": num(p.price), MRP: num(p.mrpPrice),
-      "Discount (Off)": num(p.discount), Stock: num(p.stock), Unit: p.unit || "", Status: p.status || "inactive", Popular: p.mostPopular ? "Yes" : "No",
+      "Discount (Rs.)": num(p.discount), Stock: num(p.stock), Unit: p.unit || "", Status: p.status || "inactive", Popular: p.mostPopular ? "Yes" : "No",
       Reselling: p.reselling ? "Yes" : "No", SKU: p.sku || "", Image: p.image || "",
     }));
     const wb = new Workbook();
@@ -320,7 +320,7 @@ export default function ProductList() {
           if (name) {
             batch.set(doc(collection(db, "products")), {
               nameEn: name, nameUr: row.nameUr || row["Name (UR)"] || "", categoryName: row.categoryName || row.Category || "",
-              price: num(row.price || row["Price (PKR)"]), mrpPrice: num(row.mrpPrice || row.MRP), discount: num(row.discount || row["Discount (Off)"]),
+              price: num(row.price || row["Price (PKR)"]), mrpPrice: num(row.mrpPrice || row.MRP), discount: num(row.discount || row["Discount (Rs.)"] || row["Discount (Off)"]),
               stock: num(row.stock || row.Stock), unit: row.unit || row.Unit || "", status: (row.status || row.Status || "active").toLowerCase(),
               mostPopular: ["yes", "true", "1"].includes(String(row.mostPopular || row.Popular || "").toLowerCase()),
               reselling: ["yes", "true", "1"].includes(String(row.reselling || row.Reselling || "").toLowerCase()),
@@ -395,6 +395,10 @@ export default function ProductList() {
           {["", "active", "inactive"].map(s => <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 rounded text-xs font-semibold ${statusFilter === s ? (s === "active" ? "bg-green-500 text-white" : s === "inactive" ? "bg-red-500 text-white" : "bg-white shadow") : "text-gray-600"}`}>{s === "" ? "All" : s === "active" ? `🟢 Active (${stats.active})` : `🔴 Inactive (${stats.inactive})`}</button>)}
         </div>
 
+        <button onClick={() => setDiscountFilter(f => f === "discounted" ? "" : "discounted")} className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold ${discountFilter === "discounted" ? "bg-red-500 text-white" : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"}`}>
+          <FaTag className="w-4 h-4" /> Discounted
+        </button>
+
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="p-2.5 border rounded-lg text-sm">
           <option value="createdAt">Date</option><option value="nameEn">Name</option><option value="price">Price</option><option value="stock">Stock</option>
         </select>
@@ -406,14 +410,40 @@ export default function ProductList() {
         </select>
       </div>
 
-      {showFilters && <div className="bg-white rounded-xl shadow p-4 mb-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-        <select value={stockFilter} onChange={e => setStockFilter(e.target.value)} className="p-2 border rounded-lg text-sm">
-          <option value="">All Stock</option><option value="instock">In Stock</option><option value="lowstock">Low</option><option value="outofstock">Out</option>
-        </select>
-        <input type="number" placeholder="Min PKR" value={priceRange.min} onChange={e => setPriceRange(p => ({ ...p, min: e.target.value }))} className="p-2 border rounded-lg text-sm" />
-        <input type="number" placeholder="Max PKR" value={priceRange.max} onChange={e => setPriceRange(p => ({ ...p, max: e.target.value }))} className="p-2 border rounded-lg text-sm" />
-        {hasFilters && <button onClick={clearFilters} className="p-2 bg-red-50 text-red-600 rounded-lg text-sm font-semibold flex items-center justify-center gap-1"><FaTimes className="w-3 h-3" /> Clear</button>}
-      </div>}
+      {showFilters && (
+        <div className="bg-white rounded-xl shadow p-4 mb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <select value={stockFilter} onChange={e => setStockFilter(e.target.value)} className="p-2 border rounded-lg text-sm">
+            <option value="">All Stock</option>
+            <option value="instock">In Stock</option>
+            <option value="lowstock">Low Stock</option>
+            <option value="outofstock">Out of Stock</option>
+          </select>
+
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setDiscountFilter("")}
+              className={`flex-1 py-1.5 rounded text-xs font-semibold transition ${discountFilter === "" ? "bg-white shadow text-gray-700" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setDiscountFilter("discounted")}
+              className={`flex-1 py-1.5 rounded text-xs font-semibold transition ${discountFilter === "discounted" ? "bg-red-500 text-white shadow" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              🏷️ On Sale
+            </button>
+          </div>
+
+          {hasFilters && (
+            <button
+              onClick={clearFilters}
+              className="p-2 bg-red-50 text-red-600 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 hover:bg-red-100 transition"
+            >
+              <FaTimes className="w-3 h-3" /> Clear All
+            </button>
+          )}
+        </div>
+      )}
 
       {selectedProducts.length > 0 && <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-4 mb-4 text-white flex flex-wrap items-center justify-between gap-3">
         <span className="font-bold"><FaCheckDouble className="inline w-4 h-4 mr-2" />{selectedProducts.length} selected</span>
@@ -456,7 +486,11 @@ export default function ProductList() {
                   <td className="p-3">{p.image ? <img src={p.image} alt="" className="w-12 h-12 rounded-lg object-cover cursor-pointer hover:scale-110 transition" onClick={() => setFullImage(p.image)} /> : <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center"><FaImage className="w-5 h-5 text-gray-400" /></div>}</td>
                   <td className="p-3"><p className="font-semibold">{p.nameEn || "Unnamed"}</p>{p.nameUr && <p className="text-xs text-gray-500">{p.nameUr}</p>}</td>
                   <td className="p-3 text-gray-600">{p.categoryName || "-"}</td>
-                  <td className="p-3"><span className="font-bold text-green-600">{formatPrice(p.price)}</span>{num(p.mrpPrice) > num(p.price) && <p className="text-xs text-gray-400 line-through">{formatPrice(p.mrpPrice)}</p>}</td>
+                  <td className="p-3">
+                    <span className="font-bold text-green-600">{formatPrice(p.price)}</span>
+                    {num(p.mrpPrice) > num(p.price) && <p className="text-xs text-gray-400 line-through">{formatPrice(p.mrpPrice)}</p>}
+                    {num(p.discount) > 0 && <p className="text-xs text-red-500 font-bold mt-0.5">Rs. {p.discount} OFF</p>}
+                  </td>
                   <td className="p-3"><StockBadge stock={p.stock} /></td>
                   <td className="p-3"><StatusBadge status={p.status} onChange={() => toggleStatus(p)} disabled={updatingStatus === p.id} /></td>
                   <td className="p-3 text-center">{p.mostPopular ? <FaStar className="w-5 h-5 text-yellow-500 mx-auto" /> : <FaRegStar className="w-5 h-5 text-gray-300 mx-auto" />}</td>
@@ -474,7 +508,7 @@ export default function ProductList() {
                 {p.image ? <img src={p.image} alt="" className="w-full h-full object-cover" onClick={() => setFullImage(p.image)} /> : <div className="w-full h-full flex items-center justify-center"><FaImage className="w-12 h-12 text-gray-300" /></div>}
                 <div className="absolute top-2 left-2"><StatusBadge status={p.status} onChange={() => toggleStatus(p)} disabled={updatingStatus === p.id} /></div>
                 <div className="absolute top-2 right-2"><input type="checkbox" checked={selectedProducts.includes(p.id)} onChange={() => setSelectedProducts(s => s.includes(p.id) ? s.filter(x => x !== p.id) : [...s, p.id])} className="w-5 h-5" /></div>
-                {num(p.discount) > 0 && <span className="absolute bottom-2 left-2 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded">{p.discount} OFF</span>}
+                {num(p.discount) > 0 && <span className="absolute bottom-2 left-2 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded">Rs. {p.discount} OFF</span>}
                 {p.mostPopular && <div className="absolute bottom-2 right-2 p-1.5 bg-yellow-500 text-white rounded-full"><FaStar className="w-3 h-3" /></div>}
               </div>
               <div className="p-3">
@@ -504,16 +538,28 @@ export default function ProductList() {
         <img src={fullImage} alt="" className="max-w-full max-h-[90vh] rounded-xl" />
         <button onClick={() => setFullImage(null)} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full"><FaTimes className="w-5 h-5" /></button>
       </div>}
-
       {editProduct && <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 flex items-center justify-between">
             <h2 className="font-bold flex items-center gap-2"><FaEdit /> Edit Product</h2>
             <button onClick={() => { setEditProduct(null); setImageFile(null); setImagePreview(null); }} className="p-1.5 hover:bg-white/20 rounded"><FaTimes className="w-5 h-5" /></button>
           </div>
+
           <div className="p-4 overflow-y-auto max-h-[calc(90vh-120px)] grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-xs font-semibold text-gray-600">Name (EN)</label><input type="text" value={editProduct.nameEn || ""} onChange={e => setEditProduct({ ...editProduct, nameEn: e.target.value })} className="w-full p-2 border rounded-lg mt-1" /></div>
-            <div><label className="text-xs font-semibold text-gray-600">Name (UR)</label><input type="text" value={editProduct.nameUr || ""} onChange={e => setEditProduct({ ...editProduct, nameUr: e.target.value })} className="w-full p-2 border rounded-lg mt-1 text-right" dir="rtl" /></div>
+
+            {/* Name EN */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Name (EN)</label>
+              <input type="text" value={editProduct.nameEn || ""} onChange={e => setEditProduct({ ...editProduct, nameEn: e.target.value })} className="w-full p-2 border rounded-lg mt-1" />
+            </div>
+
+            {/* Name UR */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Name (UR)</label>
+              <input type="text" value={editProduct.nameUr || ""} onChange={e => setEditProduct({ ...editProduct, nameUr: e.target.value })} className="w-full p-2 border rounded-lg mt-1 text-right" dir="rtl" />
+            </div>
+
+            {/* Category */}
             <div>
               <label className="text-xs font-semibold text-gray-600">Category</label>
               <select value={editProduct.category || ""} onChange={e => {
@@ -525,6 +571,8 @@ export default function ProductList() {
                 {mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+
+            {/* Subcategory */}
             <div>
               <label className="text-xs font-semibold text-gray-600">Subcategory</label>
               <select value={editProduct.subcategory || ""} onChange={e => setEditProduct({ ...editProduct, subcategory: e.target.value })} className="w-full p-2 border rounded-lg mt-1">
@@ -532,43 +580,171 @@ export default function ProductList() {
                 {Object.values(categoriesMap).filter(c => c.parentId === editProduct.category).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <div><label className="text-xs font-semibold text-gray-600">Price (PKR)</label><input type="number" value={editProduct.price || ""} onChange={e => {
-              const val = e.target.value;
-              const price = num(val);
-              const mrp = num(editProduct.mrpPrice);
-              let autoDiscount = editProduct.discount;
-              if (mrp > 0 && price > 0 && mrp > price) autoDiscount = Math.round(mrp - price);
-              else if (mrp > 0 && price >= mrp) autoDiscount = 0;
-              setEditProduct({ ...editProduct, price: val, discount: autoDiscount });
-            }} className="w-full p-2 border rounded-lg mt-1" /></div>
-            <div><label className="text-xs font-semibold text-gray-600">MRP (PKR)</label><input type="number" value={editProduct.mrpPrice || ""} onChange={e => {
-              const val = e.target.value;
-              const mrp = num(val);
-              const price = num(editProduct.price);
-              let autoDiscount = editProduct.discount;
-              if (mrp > 0 && price > 0 && mrp > price) autoDiscount = Math.round(mrp - price);
-              else if (mrp > 0 && price >= mrp) autoDiscount = 0;
-              setEditProduct({ ...editProduct, mrpPrice: val, discount: autoDiscount });
-            }} className="w-full p-2 border rounded-lg mt-1" /></div>
-            <div><label className="text-xs font-semibold text-gray-600">Discount (Off)</label><input type="number" value={editProduct.discount || ""} onChange={e => setEditProduct({ ...editProduct, discount: e.target.value })} className="w-full p-2 border rounded-lg mt-1" /></div>
-            <div><label className="text-xs font-semibold text-gray-600">Stock</label><input type="number" value={editProduct.stock || ""} onChange={e => setEditProduct({ ...editProduct, stock: e.target.value })} className="w-full p-2 border rounded-lg mt-1" /></div>
-            <div><label className="text-xs font-semibold text-gray-600">Unit</label><input type="text" value={editProduct.unit || ""} onChange={e => setEditProduct({ ...editProduct, unit: e.target.value })} className="w-full p-2 border rounded-lg mt-1" /></div>
-            <div><label className="text-xs font-semibold text-gray-600">Order Limit</label><input type="number" value={editProduct.orderLimit || ""} onChange={e => setEditProduct({ ...editProduct, orderLimit: e.target.value })} className="w-full p-2 border rounded-lg mt-1" /></div>
+
+            {/* Price */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Price (PKR)</label>
+              <input type="number" value={editProduct.price || ""} onChange={e => {
+                const price = num(e.target.value);
+                const mrp = num(editProduct.mrpPrice);
+                const autoDiscount = mrp > price ? Math.round(mrp - price) : 0;
+                setEditProduct({ ...editProduct, price: e.target.value, discount: autoDiscount });
+              }} className="w-full p-2 border rounded-lg mt-1" />
+            </div>
+
+            {/* MRP */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600">MRP (PKR)</label>
+              <input type="number" value={editProduct.mrpPrice || ""} onChange={e => {
+                const mrp = num(e.target.value);
+                const price = num(editProduct.price);
+                const autoDiscount = mrp > price ? Math.round(mrp - price) : 0;
+                setEditProduct({ ...editProduct, mrpPrice: e.target.value, discount: autoDiscount });
+              }} className="w-full p-2 border rounded-lg mt-1" />
+            </div>
+
+            {/* ✅ DISCOUNT - Updated Field */}
+            <div className="sm:col-span-2">
+              <label className="text-xs font-semibold text-gray-600 flex items-center justify-between">
+                <span>Discount (Rs.)</span>
+                {num(editProduct.mrpPrice) > num(editProduct.price) && num(editProduct.price) > 0 ? (
+                  <span className="text-xs font-normal text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                    ✓ Auto: PKR {num(editProduct.mrpPrice) - num(editProduct.price)} (MRP − Price)
+                  </span>
+                ) : (
+                  <span className="text-xs font-normal text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                    Manual override
+                  </span>
+                )}
+              </label>
+
+              {/* Input with Rs. prefix */}
+              <div className="relative mt-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">Rs.</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={editProduct.discount ?? ""}
+                  onChange={e => {
+                    const val = Number(e.target.value);
+                    setEditProduct({ ...editProduct, discount: val < 0 ? 0 : val });
+                  }}
+                  className={`w-full pl-12 pr-20 py-2 border-2 rounded-lg outline-none transition font-semibold
+              ${num(editProduct.discount) > 0
+                      ? "border-red-300 bg-red-50 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-600"
+                      : "border-gray-200 bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-gray-700"
+                    }`}
+                  placeholder="0"
+                />
+                {num(editProduct.discount) > 0 && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
+                    OFF
+                  </span>
+                )}
+              </div>
+
+              {/* Price breakdown */}
+              {num(editProduct.price) > 0 && num(editProduct.mrpPrice) > 0 && (
+                <div className="mt-2 p-2.5 bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-gray-500">
+                      MRP: <strong className="line-through text-gray-600">PKR {num(editProduct.mrpPrice).toLocaleString()}</strong>
+                    </span>
+                    <span className="text-gray-400 font-bold">−</span>
+                    <span className="text-gray-500">
+                      Selling: <strong className="text-green-600">PKR {num(editProduct.price).toLocaleString()}</strong>
+                    </span>
+                    <span className="text-gray-400 font-bold">=</span>
+                    {num(editProduct.discount) > 0 ? (
+                      <span className="px-2 py-0.5 bg-red-100 text-red-600 font-bold rounded-md">
+                        Rs. {num(editProduct.discount).toLocaleString()} OFF
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md">No Discount</span>
+                    )}
+                  </div>
+                  {num(editProduct.discount) > 0 && (
+                    <p className="text-xs text-green-600 font-semibold mt-1 text-right">
+                      🎉 Customer saves: PKR {num(editProduct.discount).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-gray-400 mt-1">Auto-calculated from MRP − Price. You can also type manually.</p>
+            </div>
+
+            {/* Stock */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Stock</label>
+              <input type="number" value={editProduct.stock || ""} onChange={e => setEditProduct({ ...editProduct, stock: e.target.value })} className="w-full p-2 border rounded-lg mt-1" />
+            </div>
+
+            {/* Unit */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Unit</label>
+              <input type="text" value={editProduct.unit || ""} onChange={e => setEditProduct({ ...editProduct, unit: e.target.value })} className="w-full p-2 border rounded-lg mt-1" />
+            </div>
+
+            {/* Order Limit */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Order Limit</label>
+              <input type="number" value={editProduct.orderLimit || ""} onChange={e => setEditProduct({ ...editProduct, orderLimit: e.target.value })} className="w-full p-2 border rounded-lg mt-1" />
+            </div>
+
+            {/* Status */}
             <div className="bg-yellow-50 p-3 rounded-lg border-2 border-yellow-200">
               <label className="text-xs font-semibold text-gray-600">Status</label>
               <select value={editProduct.status || "inactive"} onChange={e => setEditProduct({ ...editProduct, status: e.target.value })} className="w-full p-2 border rounded-lg mt-1 font-bold">
-                <option value="active">Active</option><option value="inactive">Inactive</option>
+                <option value="active">🟢 Active</option>
+                <option value="inactive">🔴 Inactive</option>
               </select>
             </div>
-            <div><label className="text-xs font-semibold text-gray-600">Popular</label><select value={editProduct.mostPopular ? "yes" : "no"} onChange={e => setEditProduct({ ...editProduct, mostPopular: e.target.value === "yes" })} className="w-full p-2 border rounded-lg mt-1"><option value="no">No</option><option value="yes">Yes</option></select></div>
-            <div><label className="text-xs font-semibold text-gray-600">Reselling</label><select value={editProduct.reselling ? "yes" : "no"} onChange={e => setEditProduct({ ...editProduct, reselling: e.target.value === "yes" })} className="w-full p-2 border rounded-lg mt-1"><option value="no">No</option><option value="yes">Yes</option></select></div>
-            <div className="sm:col-span-2"><label className="text-xs font-semibold text-gray-600">Image</label><div className="flex items-center gap-3 mt-1"><input type="file" accept="image/*" onChange={handleImageSelect} className="flex-1 p-2 border-2 border-dashed rounded-lg text-sm" />{(imagePreview || editProduct.image) && <img src={imagePreview || editProduct.image} alt="" className="w-16 h-16 rounded-lg object-cover" />}</div></div>
-            <div className="sm:col-span-2"><label className="text-xs font-semibold text-gray-600">Description</label><textarea value={editProduct.description || ""} onChange={e => setEditProduct({ ...editProduct, description: e.target.value })} className="w-full p-2 border rounded-lg mt-1 min-h-[80px]" /></div>
+
+            {/* Popular */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Popular</label>
+              <select value={editProduct.mostPopular ? "yes" : "no"} onChange={e => setEditProduct({ ...editProduct, mostPopular: e.target.value === "yes" })} className="w-full p-2 border rounded-lg mt-1">
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+
+            {/* Reselling */}
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Reselling</label>
+              <select value={editProduct.reselling ? "yes" : "no"} onChange={e => setEditProduct({ ...editProduct, reselling: e.target.value === "yes" })} className="w-full p-2 border rounded-lg mt-1">
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+
+            {/* Image */}
+            <div className="sm:col-span-2">
+              <label className="text-xs font-semibold text-gray-600">Image</label>
+              <div className="flex items-center gap-3 mt-1">
+                <input type="file" accept="image/*" onChange={handleImageSelect} className="flex-1 p-2 border-2 border-dashed rounded-lg text-sm" />
+                {(imagePreview || editProduct.image) && (
+                  <img src={imagePreview || editProduct.image} alt="" className="w-16 h-16 rounded-lg object-cover" />
+                )}
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="sm:col-span-2">
+              <label className="text-xs font-semibold text-gray-600">Description</label>
+              <textarea value={editProduct.description || ""} onChange={e => setEditProduct({ ...editProduct, description: e.target.value })} className="w-full p-2 border rounded-lg mt-1 min-h-[80px]" />
+            </div>
+
           </div>
+
+          {/* Footer */}
           <div className="border-t p-4 bg-gray-50 flex justify-end gap-2">
             <button onClick={() => { setEditProduct(null); setImageFile(null); setImagePreview(null); }} className="px-4 py-2 bg-gray-200 rounded-lg font-semibold flex items-center gap-1"><FaTimes /> Cancel</button>
-            <button onClick={handleSave} disabled={uploadingImage} className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold flex items-center gap-1 disabled:opacity-50">{uploadingImage ? <><FaSync className="animate-spin" /> Uploading...</> : <><FaSave /> Save</>}</button>
+            <button onClick={handleSave} disabled={uploadingImage} className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold flex items-center gap-1 disabled:opacity-50">
+              {uploadingImage ? <><FaSync className="animate-spin" /> Uploading...</> : <><FaSave /> Save</>}
+            </button>
           </div>
+
         </div>
       </div>}
 

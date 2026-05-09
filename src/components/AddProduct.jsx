@@ -166,12 +166,7 @@ export default function AddProduct() {
     const price = num(value);
     const mrp = num(product.mrpPrice);
     
-    let autoDiscount = product.discount;
-    if (mrp > 0 && price > 0 && mrp > price) {
-      autoDiscount = Math.round(((mrp - price) / mrp) * 100);
-    } else if (mrp > 0 && price >= mrp) {
-      autoDiscount = 0;
-    }
+    const autoDiscount = mrp > price ? Math.round(mrp - price) : 0;
 
     setProduct((prev) => ({
       ...prev,
@@ -186,12 +181,7 @@ export default function AddProduct() {
     const mrp = num(value);
     const price = num(product.price);
     
-    let autoDiscount = product.discount;
-    if (mrp > 0 && price > 0 && mrp > price) {
-      autoDiscount = Math.round(((mrp - price) / mrp) * 100);
-    } else if (mrp > 0 && price >= mrp) {
-      autoDiscount = 0;
-    }
+    const autoDiscount = mrp > price ? Math.round(mrp - price) : 0;
 
     setProduct((prev) => ({
       ...prev,
@@ -649,18 +639,16 @@ export default function AddProduct() {
 
                   {/* Discount */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Discount (%)</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Discount (Rs.)</label>
                     <div className="relative">
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><FaPercent className="w-3 h-3" /></span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold mt-0.5">Rs</span>
                       <input
                         type="number"
                         name="discount"
-                        value={product.discount}
+                        value={product.discount === 0 ? 0 : (product.discount || "")}
                         onChange={handleChange}
                         placeholder="0"
-                        min="0"
-                        max="100"
-                        className="w-full p-3 pr-10 rounded-xl border-2 border-gray-200 bg-white/80 backdrop-blur-sm outline-none focus:border-blue-500 transition"
+                        className="w-full p-3 pl-10 rounded-xl border-2 border-gray-200 bg-white/80 backdrop-blur-sm outline-none focus:border-blue-500 transition"
                       />
                     </div>
                   </div>
