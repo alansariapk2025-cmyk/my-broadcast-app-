@@ -1,4 +1,4 @@
-// src/pages/Payments.jsx
+﻿// src/pages/Payments.jsx
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { db } from "../firebase";
 import {
@@ -23,9 +23,8 @@ import {
 import JsBarcode from "jsbarcode";
 
 const num = (v) => (typeof v === "number" && !isNaN(v) ? v : Number(v) || 0);
-<<<<<<< HEAD
 
-// ── Default Print Settings ──
+// ΓöÇΓöÇ Default Print Settings ΓöÇΓöÇ
 const DEFAULT_SETTINGS = {
   paperWidth: 80,
   paperHeight: "auto",
@@ -41,7 +40,7 @@ const DEFAULT_SETTINGS = {
   totalsSize: 12,
   grandTotalSize: 14,
   footerSize: 10,
-  // ── UPDATED: 4 columns instead of 3 ──
+  // ΓöÇΓöÇ UPDATED: 4 columns instead of 3 ΓöÇΓöÇ
   itemColWidth: 36,
   qtyColWidth: 14,
   rateColWidth: 22,
@@ -78,8 +77,6 @@ const saveSettings = (settings) => {
     return false;
   }
 };
-=======
->>>>>>> a53463c (updated login)
 
 export default function Payments() {
   const [orders, setOrders] = useState([]);
@@ -92,16 +89,12 @@ export default function Payments() {
   const [printSettings, setPrintSettings] = useState(loadSettings());
   const perPage = 15;
 
-  // ── Fetch Orders ──
+  // ΓöÇΓöÇ Fetch Orders ΓöÇΓöÇ
   useEffect(() => {
     const q = query(
       collection(db, "orders"),
       orderBy("createdAt", "desc"),
-<<<<<<< HEAD
       limit(200)
-=======
-      limit(200),
->>>>>>> a53463c (updated login)
     );
     const unsubscribe = onSnapshot(
       q,
@@ -116,12 +109,12 @@ export default function Payments() {
       (err) => {
         console.error("Orders fetch error:", err);
         setLoading(false);
-      },
+      }
     );
     return () => unsubscribe();
   }, []);
 
-  // ── Filter Orders ──
+  // ΓöÇΓöÇ Filter Orders ΓöÇΓöÇ
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return orders.filter((o) => {
@@ -169,10 +162,10 @@ export default function Payments() {
 
   const handleSaveSettings = () => {
     if (saveSettings(printSettings)) {
-      alert("✅ Settings saved successfully!");
+      alert("Γ£à Settings saved successfully!");
       setShowSettings(false);
     } else {
-      alert("❌ Failed to save settings");
+      alert("Γ¥î Failed to save settings");
     }
   };
 
@@ -187,7 +180,7 @@ export default function Payments() {
     setPrintSettings((prev) => ({ ...prev, [key]: value }));
   };
 
-  // ── Generate Invoice ──
+  // ΓöÇΓöÇ Generate Invoice ΓöÇΓöÇ
   const handleInvoice = useCallback(
     async (order) => {
       setInvoiceLoading(order.id);
@@ -214,8 +207,7 @@ export default function Payments() {
         const del = num(order.deliveryCharge ?? 0);
         const grand = num(order.grandTotal ?? sub + del);
 
-<<<<<<< HEAD
-        // ── Barcode ──
+        // ΓöÇΓöÇ Barcode ΓöÇΓöÇ
         let barcodeDataUrl = "";
         if (s.showBarcode) {
           try {
@@ -235,9 +227,9 @@ export default function Payments() {
           }
         }
 
-        // ══════════════════════════════════════════════
-        // ── FIXED: 4 columns - Item | Qty | Rate | Amount ──
-        // ══════════════════════════════════════════════
+        // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+        // ΓöÇΓöÇ FIXED: 4 columns - Item | Qty | Rate | Amount ΓöÇΓöÇ
+        // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
         const itemsRowsHTML = items
           .map((item) => {
             const price = num(item?.price || 0);
@@ -299,7 +291,7 @@ export default function Payments() {
           s.paperHeight === "auto" ? "auto" : `${s.paperHeight}mm`;
         const pageStyle = `@page { size: ${s.paperWidth}mm ${paperHeight}; margin: ${s.margin}mm; }`;
 
-        // ── Invoice HTML ──
+        // ΓöÇΓöÇ Invoice HTML ΓöÇΓöÇ
         const invoiceHTML = `
           <div class="invoice-container" style="
             width: 100%;
@@ -328,52 +320,6 @@ export default function Payments() {
                 font-weight: bold;
                 margin-top: 6px;
               ">${s.receiptTitle}</div>
-=======
-          return `
-            <tr style="border-bottom: 1px dashed #ccc;">
-              <td class="urdu-text" style="
-                padding: 4px 4px 4px 0;
-                vertical-align: top;
-                font-size: 12px;
-                color: #000;
-                width: 62%;
-                line-height: 1.35;
-                overflow-wrap: anywhere;
-                word-break: break-word;
-              ">
-                ${itemName}
-              </td>
-              <td style="
-                padding: 4px 2px;
-                text-align: right;
-                vertical-align: top;
-                font-size: 10px;
-                color: #000;
-                width: 13%;
-                white-space: nowrap;
-              ">${qty}</td>
-              <td style="
-                padding: 4px 0 4px 4px;
-                text-align: right;
-                vertical-align: top;
-                font-size: 10px;
-                color: #000;
-                width: 25%;
-                white-space: nowrap;
-              ">${price.toLocaleString()}</td>
-            </tr>`;
-        })
-        .join("");
-
-      // ── Invoice HTML ──
-      const invoiceHTML = `
-        <div style="width: 288px; max-width: 100%; padding: 10px 14px; background: #ffffff; color: #000000; font-family: Arial, sans-serif; box-sizing: border-box; margin: 0 auto; overflow: hidden;">
-
-          <!-- STORE HEADER -->
-          <div style="text-align: center; padding-bottom: 10px;">
-            <div style="font-size: 18px; font-weight: bold; letter-spacing: 0.5px; margin: 0 0 5px 0; text-transform: uppercase;">
-              ANSARI TRADERS
->>>>>>> a53463c (updated login)
             </div>
 
             <div style="border-top: 1px dashed ${s.textColor}; margin: 6px 0;"></div>
@@ -398,10 +344,9 @@ export default function Payments() {
 
             <div style="border-top: 1px dashed ${s.textColor}; margin: 6px 0;"></div>
 
-<<<<<<< HEAD
-            <!-- ═══════════════════════════════════════ -->
+            <!-- ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
             <!-- ITEMS TABLE - 4 COLUMNS: Item|Qty|Rate|Amount -->
-            <!-- ═══════════════════════════════════════ -->
+            <!-- ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
             <table style="
               width: 100%;
               border-collapse: collapse;
@@ -442,21 +387,6 @@ export default function Payments() {
               </thead>
               <tbody>${itemsRowsHTML}</tbody>
             </table>
-=======
-          <!-- ITEMS TABLE -->
-          <table style="width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 10px;">
-            <thead>
-              <tr style="border-bottom: 1px solid #000;">
-                <th style="padding: 4px 4px 4px 0; text-align: left; font-size: 11px; font-weight: bold; width: 62%;">Item</th>
-                <th style="padding: 4px 2px; text-align: right; font-size: 11px; font-weight: bold; width: 13%;">Qty</th>
-                <th style="padding: 4px 0 4px 4px; text-align: right; font-size: 11px; font-weight: bold; width: 25%;">Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsRowsHTML}
-            </tbody>
-          </table>
->>>>>>> a53463c (updated login)
 
             <div style="border-top: 1px dashed ${s.textColor}; margin: 4px 0;"></div>
 
@@ -498,7 +428,6 @@ export default function Payments() {
               </tbody>
             </table>
 
-<<<<<<< HEAD
             ${barcodeDataUrl
             ? `<div style="text-align: center; margin-top: 12px;">
                   <img src="${barcodeDataUrl}" style="height: ${s.barcodeHeight}px; max-width: 100%; display: block; margin: 0 auto;" />
@@ -513,7 +442,7 @@ export default function Payments() {
           </div>
         `;
 
-        // ── Open Print Window ──
+        // ΓöÇΓöÇ Open Print Window ΓöÇΓöÇ
         const printWindow = window.open("", "", "height=900,width=400");
         printWindow.document.write(`
           <!DOCTYPE html>
@@ -564,7 +493,7 @@ export default function Payments() {
   return (
     <div className="p-6 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl shadow-2xl w-full max-w-7xl mx-auto overflow-auto border border-blue-200">
 
-      {/* ── Page Title with Settings Button ── */}
+      {/* ΓöÇΓöÇ Page Title with Settings Button ΓöÇΓöÇ */}
       <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <div>
           <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-indigo-700 tracking-tight">
@@ -581,99 +510,15 @@ export default function Payments() {
           <FaCog className="animate-spin-slow" />
           Print Settings
         </button>
-=======
-          <!-- BARCODE -->
-          ${
-            barcodeDataUrl
-              ? `
-          <div style="text-align: center; margin-top: 15px;">
-            <img src="${barcodeDataUrl}" style="height: 35px; max-width: 100%; display: block; margin: 0 auto;" />
-            <div style="font-size: 9px; color: #000; letter-spacing: 1px; margin-top: 4px;">${order.orderId || "000"}</div>
-          </div>`
-              : ""
-          }
-
-          <!-- FOOTER -->
-          <div style="text-align: center; margin-top: 15px;">
-            <div style="font-size: 10px; color: #000;">Thank you for shopping with us!</div>
-          </div>
-        </div>
-      `;
-
-      const printWindow = window.open("", "", "height=900,width=800");
-      printWindow.document.write("<html><head><title>Invoice</title>");
-      printWindow.document.write(
-        "<link href='https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap' rel='stylesheet'>",
-      );
-      printWindow.document.write("<style>");
-      printWindow.document.write(
-        "body { font-family: Arial, sans-serif; margin: 0; padding: 8px 12px; box-sizing: border-box; } @page { margin: 4mm; } * { box-sizing: border-box; }",
-      );
-      printWindow.document.write(
-        ".urdu-text { font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif; direction: rtl; unicode-bidi: embed; text-align: right; display: block; }",
-      );
-      printWindow.document.write("</style>");
-      printWindow.document.write("</head><body>");
-      printWindow.document.write(invoiceHTML);
-      printWindow.document.write("</body></html>");
-      printWindow.document.close();
-
-      // Wait for fonts to load before printing
-      setTimeout(() => {
-        printWindow.print();
-      }, 500);
-    } catch (err) {
-      console.error("Invoice error:", err);
-      alert("Invoice error: " + err.message);
-    } finally {
-      setInvoiceLoading(null);
-    }
-  };
-
-  return (
-    <div className="p-6 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl shadow-2xl w-full max-w-7xl mx-auto overflow-auto border border-blue-200">
-      {/* ── Page Title ── */}
-      <div className="text-center mb-8">
-        <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-indigo-700 tracking-tight">
-          Orders & Payments
-        </h2>
-        <p className="text-gray-500 text-sm mt-1">
-          Manage all customer orders and invoices
-        </p>
->>>>>>> a53463c (updated login)
       </div>
 
-      {/* ── Stats Bar ── */}
+      {/* ΓöÇΓöÇ Stats Bar ΓöÇΓöÇ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-<<<<<<< HEAD
           { label: "Total Orders", value: orders.length, color: "from-blue-500 to-blue-600" },
           { label: "Pending", value: orders.filter((o) => (o.status || "Pending") === "Pending").length, color: "from-yellow-400 to-yellow-500" },
           { label: "Paid", value: orders.filter((o) => o.status === "Paid").length, color: "from-green-500 to-green-600" },
           { label: "Delivered", value: orders.filter((o) => o.status === "Delivered").length, color: "from-indigo-500 to-indigo-600" },
-=======
-          {
-            label: "Total Orders",
-            value: orders.length,
-            color: "from-blue-500 to-blue-600",
-          },
-          {
-            label: "Pending",
-            value: orders.filter((o) => (o.status || "Pending") === "Pending")
-              .length,
-            color: "from-yellow-400 to-yellow-500",
-          },
-          {
-            label: "Paid",
-            value: orders.filter((o) => o.status === "Paid").length,
-            color: "from-green-500 to-green-600",
-          },
-          {
-            label: "Delivered",
-            value: orders.filter((o) => o.status === "Delivered").length,
-            color: "from-indigo-500 to-indigo-600",
-          },
->>>>>>> a53463c (updated login)
         ].map((s) => (
           <div key={s.label} className={`bg-gradient-to-br ${s.color} text-white rounded-xl p-4 shadow-md`}>
             <div className="text-2xl font-black">{s.value}</div>
@@ -682,7 +527,7 @@ export default function Payments() {
         ))}
       </div>
 
-      {/* ── Search + Filter ── */}
+      {/* ΓöÇΓöÇ Search + Filter ΓöÇΓöÇ */}
       <div className="flex flex-wrap gap-3 items-center justify-between mb-5">
         <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm flex-1 min-w-[240px]">
           <FaSearch className="text-gray-400 shrink-0" />
@@ -706,7 +551,7 @@ export default function Payments() {
         </select>
       </div>
 
-      {/* ── Table ── */}
+      {/* ΓöÇΓöÇ Table ΓöÇΓöÇ */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -730,7 +575,7 @@ export default function Payments() {
                   <tr>
                     <td colSpan="9" className="text-center py-16 text-gray-400">
                       <div className="flex flex-col items-center gap-2">
-                        <span className="text-4xl">📭</span>
+                        <span className="text-4xl">≡ƒô¡</span>
                         <span className="font-medium">No orders found</span>
                       </div>
                     </td>
@@ -744,23 +589,18 @@ export default function Payments() {
                         : null;
                     const date = createdAt
                       ? createdAt.toLocaleString("en-PK", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })
-                      : "—";
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })
+                      : "ΓÇö";
                     const sub = num(o.subtotal ?? o.total ?? 0);
                     const del = num(o.deliveryCharge ?? 0);
                     const grand = num(o.grandTotal ?? sub + del);
                     const statusStyles = {
                       Paid: "bg-green-100 text-green-800 border-green-200",
                       Delivered: "bg-blue-100 text-blue-800 border-blue-200",
-<<<<<<< HEAD
                       Pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
-=======
-                      Pending:
-                        "bg-yellow-100 text-yellow-800 border-yellow-200",
->>>>>>> a53463c (updated login)
                     };
                     const st = o.status || "Pending";
 
@@ -770,34 +610,25 @@ export default function Payments() {
                           {o.orderId || `ORD-${String(i + 1).padStart(3, "0")}`}
                         </td>
                         <td className="px-4 py-3 font-medium whitespace-nowrap">
-                          {o.customerName || o.name || "—"}
+                          {o.customerName || o.name || "ΓÇö"}
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                          {o.customerPhone || o.phone || "—"}
+                          {o.customerPhone || o.phone || "ΓÇö"}
                         </td>
                         <td className="px-4 py-3 font-bold text-green-700 whitespace-nowrap">
                           Rs. {grand.toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                          {o.paymentMethod || "—"}
+                          {o.paymentMethod || "ΓÇö"}
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                          {o.deliveryType || "—"}
+                          {o.deliveryType || "ΓÇö"}
                         </td>
                         <td className="px-4 py-3">
                           <select
                             value={st}
-<<<<<<< HEAD
                             onChange={(e) => handleStatusChange(o.id, e.target.value)}
                             className={`border px-2 py-1 rounded-lg text-xs font-bold cursor-pointer ${statusStyles[st] || statusStyles["Pending"]}`}
-=======
-                            onChange={(e) =>
-                              handleStatusChange(o.id, e.target.value)
-                            }
-                            className={`border px-2 py-1 rounded-lg text-xs font-bold cursor-pointer ${
-                              statusStyles[st] || statusStyles["Pending"]
-                            }`}
->>>>>>> a53463c (updated login)
                           >
                             <option value="Pending">Pending</option>
                             <option value="Paid">Paid</option>
@@ -814,7 +645,7 @@ export default function Payments() {
                             >
                               {invoiceLoading === o.id ? (
                                 <>
-                                  <span className="inline-block animate-spin">⏳</span>
+                                  <span className="inline-block animate-spin">ΓÅ│</span>
                                   Wait...
                                 </>
                               ) : (
@@ -841,14 +672,14 @@ export default function Payments() {
             </table>
           </div>
 
-          {/* ── Pagination ── */}
+          {/* ΓöÇΓöÇ Pagination ΓöÇΓöÇ */}
           <div className="flex justify-center items-center mt-5 gap-2">
             <button
               onClick={() => setPage((p) => Math.max(p - 1, 1))}
               disabled={page === 1}
               className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg disabled:opacity-40 hover:bg-blue-700 transition"
             >
-              ← Prev
+              ΓåÉ Prev
             </button>
             <div className="flex gap-1">
               {Array.from({ length: Math.min(totalPages, 7) }, (_, idx) => {
@@ -857,11 +688,10 @@ export default function Payments() {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`w-9 h-9 text-sm font-bold rounded-lg transition ${
-                      page === p
-                        ? "bg-blue-600 text-white shadow"
-                        : "bg-white text-gray-700 border border-gray-200 hover:bg-blue-50"
-                    }`}
+                    className={`w-9 h-9 text-sm font-bold rounded-lg transition ${page === p
+                      ? "bg-blue-600 text-white shadow"
+                      : "bg-white text-gray-700 border border-gray-200 hover:bg-blue-50"
+                      }`}
                   >
                     {p}
                   </button>
@@ -873,20 +703,20 @@ export default function Payments() {
               disabled={page === totalPages}
               className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg disabled:opacity-40 hover:bg-blue-700 transition"
             >
-              Next →
+              Next ΓåÆ
             </button>
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-2">
-            Showing {(page - 1) * perPage + 1}–
+            Showing {(page - 1) * perPage + 1}ΓÇô
             {Math.min(page * perPage, filtered.length)} of {filtered.length} orders
           </p>
         </>
       )}
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* ── PRINT SETTINGS MODAL ── */}
-      {/* ═══════════════════════════════════════════ */}
+      {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+      {/* ΓöÇΓöÇ PRINT SETTINGS MODAL ΓöÇΓöÇ */}
+      {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
       {showSettings && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -911,8 +741,8 @@ export default function Payments() {
             {/* Settings Body */}
             <div className="p-6 space-y-6">
 
-              {/* ── Paper Size Section ── */}
-              <Section title="📄 Paper Size & Margins">
+              {/* ΓöÇΓöÇ Paper Size Section ΓöÇΓöÇ */}
+              <Section title="≡ƒôä Paper Size & Margins">
                 <Field label="Paper Width (mm)">
                   <select
                     value={printSettings.paperWidth}
@@ -921,7 +751,7 @@ export default function Payments() {
                   >
                     <option value={58}>58mm (Small Thermal)</option>
                     <option value={72}>72mm (Medium Thermal)</option>
-                    <option value={80}>80mm (Standard Thermal) ⭐</option>
+                    <option value={80}>80mm (Standard Thermal) Γ¡É</option>
                     <option value={100}>100mm (Wide)</option>
                     <option value={210}>210mm (A4 Size)</option>
                   </select>
@@ -961,8 +791,8 @@ export default function Payments() {
                 </Field>
               </Section>
 
-              {/* ── Font Size Section ── */}
-              <Section title="🔤 Font Sizes (px)">
+              {/* ΓöÇΓöÇ Font Size Section ΓöÇΓöÇ */}
+              <Section title="≡ƒöñ Font Sizes (px)">
                 <Field label="Store Name">
                   <RangeInput value={printSettings.storeNameSize} min={12} max={28}
                     onChange={(v) => updateSetting("storeNameSize", v)} />
@@ -1001,10 +831,10 @@ export default function Payments() {
                 </Field>
               </Section>
 
-              {/* ═══════════════════════════════════════ */}
-              {/* ── UPDATED: 4 Column Widths Section ── */}
-              {/* ═══════════════════════════════════════ */}
-              <Section title="📊 Table Column Widths (%) — Item | Qty | Rate | Amount">
+              {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+              {/* ΓöÇΓöÇ UPDATED: 4 Column Widths Section ΓöÇΓöÇ */}
+              {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+              <Section title="≡ƒôè Table Column Widths (%) ΓÇö Item | Qty | Rate | Amount">
                 <Field label={`Item Column: ${printSettings.itemColWidth}%`}>
                   <input
                     type="range"
@@ -1046,18 +876,18 @@ export default function Payments() {
                   />
                 </Field>
                 <div className="col-span-full text-xs text-gray-500 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                  <strong>💡 Column Total:</strong>{" "}
+                  <strong>≡ƒÆí Column Total:</strong>{" "}
                   {printSettings.itemColWidth + printSettings.qtyColWidth + printSettings.rateColWidth + printSettings.amountColWidth}%
                   {" "}
                   {(printSettings.itemColWidth + printSettings.qtyColWidth + printSettings.rateColWidth + printSettings.amountColWidth) === 100
-                    ? <span className="text-green-600 font-bold">✅ Perfect!</span>
-                    : <span className="text-red-600 font-bold">⚠️ Should be 100%</span>
+                    ? <span className="text-green-600 font-bold">Γ£à Perfect!</span>
+                    : <span className="text-red-600 font-bold">ΓÜá∩╕Å Should be 100%</span>
                   }
                 </div>
               </Section>
 
-              {/* ── Store Info Section ── */}
-              <Section title="🏪 Store Information">
+              {/* ΓöÇΓöÇ Store Info Section ΓöÇΓöÇ */}
+              <Section title="≡ƒÅ¬ Store Information">
                 <Field label="Store Name" full>
                   <input
                     type="text"
@@ -1100,8 +930,8 @@ export default function Payments() {
                 </Field>
               </Section>
 
-              {/* ── Other Options ── */}
-              <Section title="⚙️ Other Options">
+              {/* ΓöÇΓöÇ Other Options ΓöÇΓöÇ */}
+              <Section title="ΓÜÖ∩╕Å Other Options">
                 <Field label="Font Family">
                   <select
                     value={printSettings.fontFamily}
@@ -1198,9 +1028,8 @@ export default function Payments() {
     </div>
   );
 }
-<<<<<<< HEAD
 
-// ── Reusable Components ──
+// ΓöÇΓöÇ Reusable Components ΓöÇΓöÇ
 const Section = ({ title, children }) => (
   <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200">
     <h4 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
@@ -1239,5 +1068,3 @@ const RangeInput = ({ value, min, max, onChange }) => (
     />
   </div>
 );
-=======
->>>>>>> a53463c (updated login)
