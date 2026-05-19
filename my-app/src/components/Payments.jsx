@@ -23,7 +23,6 @@ import {
 import JsBarcode from "jsbarcode";
 
 const num = (v) => (typeof v === "number" && !isNaN(v) ? v : Number(v) || 0);
-<<<<<<< HEAD
 
 // ── Default Print Settings ──
 const DEFAULT_SETTINGS = {
@@ -78,8 +77,6 @@ const saveSettings = (settings) => {
     return false;
   }
 };
-=======
->>>>>>> a53463c (updated login)
 
 export default function Payments() {
   const [orders, setOrders] = useState([]);
@@ -97,11 +94,7 @@ export default function Payments() {
     const q = query(
       collection(db, "orders"),
       orderBy("createdAt", "desc"),
-<<<<<<< HEAD
       limit(200)
-=======
-      limit(200),
->>>>>>> a53463c (updated login)
     );
     const unsubscribe = onSnapshot(
       q,
@@ -116,7 +109,7 @@ export default function Payments() {
       (err) => {
         console.error("Orders fetch error:", err);
         setLoading(false);
-      },
+      }
     );
     return () => unsubscribe();
   }, []);
@@ -214,7 +207,6 @@ export default function Payments() {
         const del = num(order.deliveryCharge ?? 0);
         const grand = num(order.grandTotal ?? sub + del);
 
-<<<<<<< HEAD
         // ── Barcode ──
         let barcodeDataUrl = "";
         if (s.showBarcode) {
@@ -328,52 +320,6 @@ export default function Payments() {
                 font-weight: bold;
                 margin-top: 6px;
               ">${s.receiptTitle}</div>
-=======
-          return `
-            <tr style="border-bottom: 1px dashed #ccc;">
-              <td class="urdu-text" style="
-                padding: 4px 4px 4px 0;
-                vertical-align: top;
-                font-size: 12px;
-                color: #000;
-                width: 62%;
-                line-height: 1.35;
-                overflow-wrap: anywhere;
-                word-break: break-word;
-              ">
-                ${itemName}
-              </td>
-              <td style="
-                padding: 4px 2px;
-                text-align: right;
-                vertical-align: top;
-                font-size: 10px;
-                color: #000;
-                width: 13%;
-                white-space: nowrap;
-              ">${qty}</td>
-              <td style="
-                padding: 4px 0 4px 4px;
-                text-align: right;
-                vertical-align: top;
-                font-size: 10px;
-                color: #000;
-                width: 25%;
-                white-space: nowrap;
-              ">${price.toLocaleString()}</td>
-            </tr>`;
-        })
-        .join("");
-
-      // ── Invoice HTML ──
-      const invoiceHTML = `
-        <div style="width: 288px; max-width: 100%; padding: 10px 14px; background: #ffffff; color: #000000; font-family: Arial, sans-serif; box-sizing: border-box; margin: 0 auto; overflow: hidden;">
-
-          <!-- STORE HEADER -->
-          <div style="text-align: center; padding-bottom: 10px;">
-            <div style="font-size: 18px; font-weight: bold; letter-spacing: 0.5px; margin: 0 0 5px 0; text-transform: uppercase;">
-              ANSARI TRADERS
->>>>>>> a53463c (updated login)
             </div>
 
             <div style="border-top: 1px dashed ${s.textColor}; margin: 6px 0;"></div>
@@ -398,7 +344,6 @@ export default function Payments() {
 
             <div style="border-top: 1px dashed ${s.textColor}; margin: 6px 0;"></div>
 
-<<<<<<< HEAD
             <!-- ═══════════════════════════════════════ -->
             <!-- ITEMS TABLE - 4 COLUMNS: Item|Qty|Rate|Amount -->
             <!-- ═══════════════════════════════════════ -->
@@ -442,21 +387,6 @@ export default function Payments() {
               </thead>
               <tbody>${itemsRowsHTML}</tbody>
             </table>
-=======
-          <!-- ITEMS TABLE -->
-          <table style="width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 10px;">
-            <thead>
-              <tr style="border-bottom: 1px solid #000;">
-                <th style="padding: 4px 4px 4px 0; text-align: left; font-size: 11px; font-weight: bold; width: 62%;">Item</th>
-                <th style="padding: 4px 2px; text-align: right; font-size: 11px; font-weight: bold; width: 13%;">Qty</th>
-                <th style="padding: 4px 0 4px 4px; text-align: right; font-size: 11px; font-weight: bold; width: 25%;">Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsRowsHTML}
-            </tbody>
-          </table>
->>>>>>> a53463c (updated login)
 
             <div style="border-top: 1px dashed ${s.textColor}; margin: 4px 0;"></div>
 
@@ -498,7 +428,6 @@ export default function Payments() {
               </tbody>
             </table>
 
-<<<<<<< HEAD
             ${barcodeDataUrl
             ? `<div style="text-align: center; margin-top: 12px;">
                   <img src="${barcodeDataUrl}" style="height: ${s.barcodeHeight}px; max-width: 100%; display: block; margin: 0 auto;" />
@@ -581,99 +510,15 @@ export default function Payments() {
           <FaCog className="animate-spin-slow" />
           Print Settings
         </button>
-=======
-          <!-- BARCODE -->
-          ${
-            barcodeDataUrl
-              ? `
-          <div style="text-align: center; margin-top: 15px;">
-            <img src="${barcodeDataUrl}" style="height: 35px; max-width: 100%; display: block; margin: 0 auto;" />
-            <div style="font-size: 9px; color: #000; letter-spacing: 1px; margin-top: 4px;">${order.orderId || "000"}</div>
-          </div>`
-              : ""
-          }
-
-          <!-- FOOTER -->
-          <div style="text-align: center; margin-top: 15px;">
-            <div style="font-size: 10px; color: #000;">Thank you for shopping with us!</div>
-          </div>
-        </div>
-      `;
-
-      const printWindow = window.open("", "", "height=900,width=800");
-      printWindow.document.write("<html><head><title>Invoice</title>");
-      printWindow.document.write(
-        "<link href='https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap' rel='stylesheet'>",
-      );
-      printWindow.document.write("<style>");
-      printWindow.document.write(
-        "body { font-family: Arial, sans-serif; margin: 0; padding: 8px 12px; box-sizing: border-box; } @page { margin: 4mm; } * { box-sizing: border-box; }",
-      );
-      printWindow.document.write(
-        ".urdu-text { font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif; direction: rtl; unicode-bidi: embed; text-align: right; display: block; }",
-      );
-      printWindow.document.write("</style>");
-      printWindow.document.write("</head><body>");
-      printWindow.document.write(invoiceHTML);
-      printWindow.document.write("</body></html>");
-      printWindow.document.close();
-
-      // Wait for fonts to load before printing
-      setTimeout(() => {
-        printWindow.print();
-      }, 500);
-    } catch (err) {
-      console.error("Invoice error:", err);
-      alert("Invoice error: " + err.message);
-    } finally {
-      setInvoiceLoading(null);
-    }
-  };
-
-  return (
-    <div className="p-6 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl shadow-2xl w-full max-w-7xl mx-auto overflow-auto border border-blue-200">
-      {/* ── Page Title ── */}
-      <div className="text-center mb-8">
-        <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-indigo-700 tracking-tight">
-          Orders & Payments
-        </h2>
-        <p className="text-gray-500 text-sm mt-1">
-          Manage all customer orders and invoices
-        </p>
->>>>>>> a53463c (updated login)
       </div>
 
       {/* ── Stats Bar ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-<<<<<<< HEAD
           { label: "Total Orders", value: orders.length, color: "from-blue-500 to-blue-600" },
           { label: "Pending", value: orders.filter((o) => (o.status || "Pending") === "Pending").length, color: "from-yellow-400 to-yellow-500" },
           { label: "Paid", value: orders.filter((o) => o.status === "Paid").length, color: "from-green-500 to-green-600" },
           { label: "Delivered", value: orders.filter((o) => o.status === "Delivered").length, color: "from-indigo-500 to-indigo-600" },
-=======
-          {
-            label: "Total Orders",
-            value: orders.length,
-            color: "from-blue-500 to-blue-600",
-          },
-          {
-            label: "Pending",
-            value: orders.filter((o) => (o.status || "Pending") === "Pending")
-              .length,
-            color: "from-yellow-400 to-yellow-500",
-          },
-          {
-            label: "Paid",
-            value: orders.filter((o) => o.status === "Paid").length,
-            color: "from-green-500 to-green-600",
-          },
-          {
-            label: "Delivered",
-            value: orders.filter((o) => o.status === "Delivered").length,
-            color: "from-indigo-500 to-indigo-600",
-          },
->>>>>>> a53463c (updated login)
         ].map((s) => (
           <div key={s.label} className={`bg-gradient-to-br ${s.color} text-white rounded-xl p-4 shadow-md`}>
             <div className="text-2xl font-black">{s.value}</div>
@@ -744,10 +589,10 @@ export default function Payments() {
                         : null;
                     const date = createdAt
                       ? createdAt.toLocaleString("en-PK", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })
                       : "—";
                     const sub = num(o.subtotal ?? o.total ?? 0);
                     const del = num(o.deliveryCharge ?? 0);
@@ -755,12 +600,7 @@ export default function Payments() {
                     const statusStyles = {
                       Paid: "bg-green-100 text-green-800 border-green-200",
                       Delivered: "bg-blue-100 text-blue-800 border-blue-200",
-<<<<<<< HEAD
                       Pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
-=======
-                      Pending:
-                        "bg-yellow-100 text-yellow-800 border-yellow-200",
->>>>>>> a53463c (updated login)
                     };
                     const st = o.status || "Pending";
 
@@ -787,17 +627,8 @@ export default function Payments() {
                         <td className="px-4 py-3">
                           <select
                             value={st}
-<<<<<<< HEAD
                             onChange={(e) => handleStatusChange(o.id, e.target.value)}
                             className={`border px-2 py-1 rounded-lg text-xs font-bold cursor-pointer ${statusStyles[st] || statusStyles["Pending"]}`}
-=======
-                            onChange={(e) =>
-                              handleStatusChange(o.id, e.target.value)
-                            }
-                            className={`border px-2 py-1 rounded-lg text-xs font-bold cursor-pointer ${
-                              statusStyles[st] || statusStyles["Pending"]
-                            }`}
->>>>>>> a53463c (updated login)
                           >
                             <option value="Pending">Pending</option>
                             <option value="Paid">Paid</option>
@@ -857,11 +688,10 @@ export default function Payments() {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`w-9 h-9 text-sm font-bold rounded-lg transition ${
-                      page === p
-                        ? "bg-blue-600 text-white shadow"
-                        : "bg-white text-gray-700 border border-gray-200 hover:bg-blue-50"
-                    }`}
+                    className={`w-9 h-9 text-sm font-bold rounded-lg transition ${page === p
+                      ? "bg-blue-600 text-white shadow"
+                      : "bg-white text-gray-700 border border-gray-200 hover:bg-blue-50"
+                      }`}
                   >
                     {p}
                   </button>
@@ -1198,7 +1028,6 @@ export default function Payments() {
     </div>
   );
 }
-<<<<<<< HEAD
 
 // ── Reusable Components ──
 const Section = ({ title, children }) => (
@@ -1239,5 +1068,3 @@ const RangeInput = ({ value, min, max, onChange }) => (
     />
   </div>
 );
-=======
->>>>>>> a53463c (updated login)
