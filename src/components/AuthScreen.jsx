@@ -42,17 +42,8 @@ export default function AuthScreen() {
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        const data = await res.json();
-
-        if (data.hasRealAdmin) {
-          setSetupMode("normal");
-        } else if (data.hasDemoAdmin) {
-          setSetupMode("demo_only");
-          setEmail("demo.admin@ansari.com");
-          setPassword("Demo1234");
-        } else {
-          setSetupMode("first_time");
-        }
+        await res.json();
+        setSetupMode("normal");
       } catch (err) {
         console.warn("⚠️ Setup check fallback:", err.message);
         setSetupMode("normal");
@@ -63,37 +54,6 @@ export default function AuthScreen() {
 
     checkSetup();
   }, []);
-
-  // ─────────────────────────────────────────────────────────────────
-  // Initialize Demo Admin
-  // ─────────────────────────────────────────────────────────────────
-  const createDemoAdmin = async () => {
-    setInitPending(true);
-    setMessage("🔧 Creating demo admin account...");
-
-    try {
-      const res = await fetch(`${BACKEND_URL}/init-demo-admin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to create demo admin");
-      }
-
-      const successText = "✅ Demo account created successfully. Sign in with the new admin account.";
-      setMessage(successText);
-      toast.success(successText);
-      setSetupMode("demo_only");
-    } catch (err) {
-      const errorText = `❌ ${err.message}`;
-      setMessage(errorText);
-      toast.error(errorText);
-    } finally {
-      setInitPending(false);
-    }
-  };
 
   // ─────────────────────────────────────────────────────────────────
   // Login Handler
@@ -178,9 +138,7 @@ export default function AuthScreen() {
       ];
 
       const errorText = credErrors.includes(err.code)
-        ? setupMode === "first_time"
-          ? "⚠️ Demo account not found. Click 'Initialize Demo Admin'."
-          : "❌ Invalid email or password."
+        ? "❌ Invalid email or password."
         : `❌ ${err.message}`;
       setMessage(errorText);
       toast.error(errorText);
@@ -206,8 +164,6 @@ export default function AuthScreen() {
   // ─────────────────────────────────────────────────────────────────
   // Computed Values
   // ─────────────────────────────────────────────────────────────────
-  const isFirstTime = setupMode === "first_time";
-  const isDemoOnly = setupMode === "demo_only";
   const alertVariant = message.startsWith("✅")
     ? "success"
     : message.startsWith("⚠️")
@@ -246,30 +202,6 @@ export default function AuthScreen() {
           </div>
 
           {/* First Time Setup Banner */}
-          {(isFirstTime || isDemoOnly) && (
-            <div className="rounded-[28px] border border-slate-700/70 bg-slate-950/70 p-4 mb-6 text-sm text-slate-200 shadow-lg shadow-black/20">
-              <div className="font-semibold mb-2 text-slate-50">
-                {isFirstTime ? "First Time Setup" : "Demo Mode"}
-              </div>
-              <p className="text-slate-300">
-                {isFirstTime
-                  ? "No admin user exists yet. Initialize a demo account to start."
-                  : "A demo admin account is available for initial access."}
-              </p>
-
-              {isFirstTime && (
-                <button
-                  onClick={createDemoAdmin}
-                  disabled={initPending}
-                  className="mt-4 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-500/30 transition hover:brightness-110 disabled:opacity-60"
-                >
-                  {initPending
-                    ? "Creating demo admin..."
-                    : "Initialize Demo Admin"}
-                </button>
-              )}
-            </div>
-          )}
 
           {/* Alert Message */}
           {message && (
@@ -308,7 +240,7 @@ export default function AuthScreen() {
               <select
                 value={loginRole}
                 onChange={(e) => setLoginRole(e.target.value)}
-                disabled={loading || isFirstTime}
+                disabled={loading}
                 className="w-full rounded-3xl border border-slate-300 bg-white/90 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
               >
                 <option value="super_admin">Super Admin</option>
