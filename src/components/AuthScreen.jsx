@@ -7,6 +7,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { auth, db } from "../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import toast, { Toaster } from "react-hot-toast";
 
 const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL ||
@@ -81,12 +82,14 @@ export default function AuthScreen() {
         throw new Error(data.error || "Failed to create demo admin");
       }
 
-      setMessage(
-        "✅ Demo account created successfully. Sign in with the new admin account."
-      );
+      const successText = "✅ Demo account created successfully. Sign in with the new admin account.";
+      setMessage(successText);
+      toast.success(successText);
       setSetupMode("demo_only");
     } catch (err) {
-      setMessage(`❌ ${err.message}`);
+      const errorText = `❌ ${err.message}`;
+      setMessage(errorText);
+      toast.error(errorText);
     } finally {
       setInitPending(false);
     }
@@ -120,19 +123,19 @@ export default function AuthScreen() {
       if (loginRole === "super_admin") {
         if (adminSnap.exists()) {
           const d = adminSnap.data();
-          setMessage(
-            d.isDemo
-              ? "✅ Logged in with demo account."
-              : "✅ Super admin login successful."
-          );
+          const successText = d.isDemo
+            ? "✅ Logged in with demo account."
+            : "✅ Super admin login successful.";
+          setMessage(successText);
+          toast.success(successText);
           return;
         }
 
         if (userSnap.exists()) {
           await auth.signOut();
-          setMessage(
-            "❌ This account is a staff user. Please choose Staff login."
-          );
+          const errorText = "❌ This account is a staff user. Please choose Staff login.";
+          setMessage(errorText);
+          toast.error(errorText);
           return;
         }
       }
@@ -142,26 +145,30 @@ export default function AuthScreen() {
           const d = userSnap.data();
           if (d.status === "suspended") {
             await auth.signOut();
-            setMessage("❌ Account suspended. Contact the super admin.");
+            const errorText = "❌ Account suspended. Contact the super admin.";
+            setMessage(errorText);
+            toast.error(errorText);
             return;
           }
-          setMessage("✅ Staff login successful.");
+          const successText = "✅ Staff login successful.";
+          setMessage(successText);
+          toast.success(successText);
           return;
         }
 
         if (adminSnap.exists()) {
           await auth.signOut();
-          setMessage(
-            "❌ This account is a super admin account. Please choose Super Admin login."
-          );
+          const errorText = "❌ This account is a super admin account. Please choose Super Admin login.";
+          setMessage(errorText);
+          toast.error(errorText);
           return;
         }
       }
 
       await auth.signOut();
-      setMessage(
-        "❌ This account is not authorized to access the admin panel."
-      );
+      const errorText = "❌ This account is not authorized to access the admin panel.";
+      setMessage(errorText);
+      toast.error(errorText);
     } catch (err) {
       const credErrors = [
         "auth/invalid-email",
@@ -170,15 +177,13 @@ export default function AuthScreen() {
         "auth/invalid-credential",
       ];
 
-      if (credErrors.includes(err.code)) {
-        setMessage(
-          setupMode === "first_time"
-            ? "⚠️ Demo account not found. Click 'Initialize Demo Admin'."
-            : "❌ Invalid email or password."
-        );
-      } else {
-        setMessage(`❌ ${err.message}`);
-      }
+      const errorText = credErrors.includes(err.code)
+        ? setupMode === "first_time"
+          ? "⚠️ Demo account not found. Click 'Initialize Demo Admin'."
+          : "❌ Invalid email or password."
+        : `❌ ${err.message}`;
+      setMessage(errorText);
+      toast.error(errorText);
     } finally {
       setLoading(false);
     }
@@ -382,6 +387,7 @@ export default function AuthScreen() {
                 : "Staff must login with assigned staff credentials."}
             </p>
           )}
+          <Toaster position="top-right" />
 
         </div>
         {/* End: Main Content Container */}
