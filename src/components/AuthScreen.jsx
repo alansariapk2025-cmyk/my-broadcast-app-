@@ -1,89 +1,89 @@
-// 📄 File: AuthScreen.jsx
-// ✅ Admin Login - Demo account only for first time setup
+// src/screens/AuthScreen.jsx
+// ✅ Production-ready login with backend setup check
+// ✅ Fixed JSX structure - all divs properly closed
 
 import { useState, useEffect } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { auth, db } from "../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 
-const BACKEND_URL = "http://localhost:5000";
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000";
 
 export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [initPending, setInitPending] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
-  const [isFirstTimeSetup, setIsFirstTimeSetup] = useState(false);
-  const [setupComplete, setSetupComplete] = useState(false);
+  const [setupMode, setSetupMode] = useState("normal");
 
-  // ✅ Check if any real admin exists (not demo)
+  // ─────────────────────────────────────────────────────────────────
+  // Check Admin Setup via Backend
+  // ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const checkAdminExists = async () => {
+    const checkSetup = async () => {
       try {
-        // Check for any non-demo admin
-        const adminsSnap = await getDocs(collection(db, "admins"));
-        
-        let hasRealAdmin = false;
-        let hasDemoAdmin = false;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        adminsSnap.forEach((doc) => {
-          const data = doc.data();
-          if (data.isDemo === true) {
-            hasDemoAdmin = true;
-          } else {
-            hasRealAdmin = true;
-          }
+        const res = await fetch(`${BACKEND_URL}/check-admin-setup`, {
+          signal: controller.signal,
         });
 
-        if (hasRealAdmin) {
-          // Real admin exists - normal login mode
-          setIsFirstTimeSetup(false);
-          setSetupComplete(true);
-        } else if (hasDemoAdmin) {
-          // Only demo admin exists - show demo login
-          setIsFirstTimeSetup(true);
-          setSetupComplete(false);
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        if (data.hasRealAdmin) {
+          setSetupMode("normal");
+        } else if (data.hasDemoAdmin) {
+          setSetupMode("demo_only");
           setEmail("demo.admin@ansari.com");
           setPassword("Demo1234");
         } else {
-          // No admin at all - first time setup
-          setIsFirstTimeSetup(true);
-          setSetupComplete(false);
+          setSetupMode("first_time");
         }
-      } catch (error) {
-        console.log("Error checking admin setup:", error);
-        setIsFirstTimeSetup(true);
+      } catch (err) {
+        console.warn("⚠️ Setup check fallback:", err.message);
+        setSetupMode("normal");
       } finally {
         setCheckingSetup(false);
       }
     };
 
-    checkAdminExists();
+    checkSetup();
   }, []);
 
-  // ✅ Create demo admin (only for first time)
+  // ─────────────────────────────────────────────────────────────────
+  // Initialize Demo Admin
+  // ─────────────────────────────────────────────────────────────────
   const createDemoAdmin = async () => {
     setInitPending(true);
     setMessage("🔧 Creating demo admin account...");
-    
+
     try {
-      const response = await fetch(`${BACKEND_URL}/init-demo-admin`, {
+      const res = await fetch(`${BACKEND_URL}/init-demo-admin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to create demo admin");
       }
-      
-      setMessage(`✅ Demo account created!\nEmail: ${data.email}\nPassword: ${data.password}`);
-      setEmail(data.email);
-      setPassword(data.password);
-      setIsFirstTimeSetup(true);
+
+      setMessage(
+        "✅ Demo account created successfully. Sign in with the new admin account."
+      );
+      setSetupMode("demo_only");
     } catch (err) {
       setMessage(`❌ ${err.message}`);
     } finally {
@@ -91,162 +91,263 @@ export default function AuthScreen() {
     }
   };
 
-  // ✅ Login handler
-  const submitLogin = async (event) => {
-    event.preventDefault();
+  // ─────────────────────────────────────────────────────────────────
+  // Login Handler
+  // ─────────────────────────────────────────────────────────────────
+  const submitLogin = async (e) => {
+    e.preventDefault();
     setLoading(true);
     setMessage("");
 
     try {
       const trimmedEmail = email.trim().toLowerCase();
-      const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
-      
-      // Verify user is in admins collection
-      const adminsSnap = await getDocs(
-        query(collection(db, "admins"), where("email", "==", trimmedEmail))
+
+      const cred = await signInWithEmailAndPassword(
+        auth,
+        trimmedEmail,
+        password
       );
 
-      if (adminsSnap.empty) {
-        await auth.signOut();
-        setMessage("❌ You are not authorized as an admin.");
+      await cred.user.getIdToken(true);
+
+      const uid = cred.user.uid;
+
+      // Check admins/
+      const adminSnap = await getDoc(doc(db, "admins", uid));
+      if (adminSnap.exists()) {
+        const d = adminSnap.data();
+        setMessage(
+          d.isDemo
+            ? "✅ Logged in with demo account."
+            : "✅ Logged in successfully."
+        );
         return;
       }
 
-      const adminData = adminsSnap.docs[0].data();
-      
-      if (adminData.isDemo) {
-        setMessage("✅ Logged in with demo account. Please create a real admin account from Admin Users section.");
-      } else {
-        setMessage("✅ Logged in successfully.");
-      }
-      
-    } catch (error) {
-      console.log("Login error:", error.code);
-      
-      if (
-        error.code === "auth/invalid-email" ||
-        error.code === "auth/user-not-found" ||
-        error.code === "auth/wrong-password" ||
-        error.code === "auth/invalid-credential"
-      ) {
-        if (isFirstTimeSetup && !setupComplete) {
-          setMessage("⚠️ Demo account not found. Click 'Initialize Demo Admin' button.");
-        } else {
-          setMessage("❌ Invalid email or password.");
+      // Check users/
+      const userSnap = await getDoc(doc(db, "users", uid));
+      if (userSnap.exists()) {
+        const d = userSnap.data();
+        if (d.status === "suspended") {
+          await auth.signOut();
+          setMessage("❌ Account suspended. Contact the super admin.");
+          return;
         }
+        setMessage("✅ Logged in successfully.");
+        return;
+      }
+
+      await auth.signOut();
+      setMessage(
+        "❌ This account is not authorized to access the admin panel."
+      );
+    } catch (err) {
+      const credErrors = [
+        "auth/invalid-email",
+        "auth/user-not-found",
+        "auth/wrong-password",
+        "auth/invalid-credential",
+      ];
+
+      if (credErrors.includes(err.code)) {
+        setMessage(
+          setupMode === "first_time"
+            ? "⚠️ Demo account not found. Click 'Initialize Demo Admin'."
+            : "❌ Invalid email or password."
+        );
       } else {
-        setMessage(`❌ ${error.message}`);
+        setMessage(`❌ ${err.message}`);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // Loading state
+  // ─────────────────────────────────────────────────────────────────
+  // Loading State
+  // ─────────────────────────────────────────────────────────────────
   if (checkingSetup) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
-        <div className="text-white text-lg">🔄 Checking admin setup...</div>
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white text-sm">Checking admin setup...</p>
+        </div>
       </div>
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Computed Values
+  // ─────────────────────────────────────────────────────────────────
+  const isFirstTime = setupMode === "first_time";
+  const isDemoOnly = setupMode === "demo_only";
+  const alertVariant = message.startsWith("✅")
+    ? "success"
+    : message.startsWith("⚠️")
+    ? "warning"
+    : message.startsWith("❌")
+    ? "error"
+    : "info";
+
+  // ─────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-4">
-      <div className="w-full max-w-md bg-white/95 backdrop-blur-lg rounded-2xl shadow-2xl p-6 text-slate-800">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 p-4">
+      <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-white/10 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl">
         
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold">🔐 Admin Login</h1>
-          <p className="text-sm text-slate-600 mt-2">
-            {setupComplete 
-              ? "Sign in to access admin control panel." 
-              : "First time setup - Initialize demo account"}
-          </p>
-        </div>
+        {/* Background Decorations */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.25),_transparent_35%)] pointer-events-none" />
+        <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-blue-500/10 blur-3xl" />
 
-        {/* First Time Setup Banner */}
-        {isFirstTimeSetup && !setupComplete && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
-            <p className="text-sm text-amber-800 font-medium">
-              ⚠️ First Time Setup
-            </p>
-            <p className="text-xs text-amber-700 mt-1">
-              Click the button below to create a demo admin account. After login, create a real admin account from Admin Users section.
-            </p>
-            
-            <button
-              onClick={createDemoAdmin}
-              disabled={initPending}
-              className="mt-3 w-full rounded-xl bg-amber-500 text-white py-2 font-semibold hover:bg-amber-600 disabled:opacity-70 transition-all"
-            >
-              {initPending ? "🔄 Creating Demo Admin..." : "🚀 Initialize Demo Admin"}
-            </button>
-            
-            <div className="mt-3 text-xs text-amber-700 bg-amber-100 rounded-lg p-2">
-              <strong>Demo Credentials:</strong><br />
-              Email: demo.admin@ansari.com<br />
-              Password: Demo1234
+        {/* Main Content Container */}
+        <div className="relative z-10">
+          
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-500 to-blue-600 text-3xl text-white shadow-xl shadow-indigo-500/20">
+              🔐
             </div>
-          </div>
-        )}
-
-        {/* Login Form */}
-        <form onSubmit={submitLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              type="email"
-              required
-              className="w-full rounded-xl border border-gray-300 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="admin@example.com"
-            />
+            <h1 className="text-3xl font-semibold text-slate-100">
+              Admin Login
+            </h1>
+            <p className="mt-2 text-sm text-slate-300">
+              {setupMode === "normal"
+                ? "Secure access to the admin dashboard."
+                : "Initialize the first administrator account."}
+            </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type="password"
-              required
-              minLength={6}
-              className="w-full rounded-xl border border-gray-300 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
-          </div>
+          {/* First Time Setup Banner */}
+          {(isFirstTime || isDemoOnly) && (
+            <div className="rounded-[28px] border border-slate-700/70 bg-slate-950/70 p-4 mb-6 text-sm text-slate-200 shadow-lg shadow-black/20">
+              <div className="font-semibold mb-2 text-slate-50">
+                {isFirstTime ? "First Time Setup" : "Demo Mode"}
+              </div>
+              <p className="text-slate-300">
+                {isFirstTime
+                  ? "No admin user exists yet. Initialize a demo account to start."
+                  : "A demo admin account is available for initial access."}
+              </p>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-indigo-600 text-white py-2.5 font-semibold hover:bg-indigo-700 disabled:opacity-70 transition-all"
-          >
-            {loading ? "🔄 Signing in..." : "Sign In"}
-          </button>
-        </form>
+              {isFirstTime && (
+                <button
+                  onClick={createDemoAdmin}
+                  disabled={initPending}
+                  className="mt-4 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-500/30 transition hover:brightness-110 disabled:opacity-60"
+                >
+                  {initPending
+                    ? "Creating demo admin..."
+                    : "Initialize Demo Admin"}
+                </button>
+              )}
+            </div>
+          )}
 
-        {/* Info Text */}
-        {setupComplete && (
-          <div className="mt-4 text-center text-xs text-gray-500">
-            Contact super admin if you need access.
-          </div>
-        )}
+          {/* Alert Message */}
+          {message && (
+            <div
+              className={`relative mb-5 overflow-hidden rounded-3xl border px-4 py-4 text-sm shadow-xl transition ${
+                alertVariant === "success"
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                  : alertVariant === "warning"
+                  ? "border-amber-300 bg-amber-50 text-amber-800"
+                  : alertVariant === "error"
+                  ? "border-rose-300 bg-rose-50 text-rose-800"
+                  : "border-slate-300 bg-slate-50 text-slate-800"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 text-lg">
+                  {alertVariant === "success"
+                    ? "✅"
+                    : alertVariant === "warning"
+                    ? "⚠️"
+                    : alertVariant === "error"
+                    ? "❌"
+                    : "ℹ️"}
+                </span>
+                <div className="flex-1 whitespace-pre-line">{message}</div>
+              </div>
+            </div>
+          )}
 
-        {/* Status Message */}
-        {message && (
-          <div className={`mt-4 p-3 rounded-xl text-sm ${
-            message.startsWith("✅") 
-              ? "bg-green-50 text-green-700 border border-green-200" 
-              : message.startsWith("⚠️")
-              ? "bg-amber-50 text-amber-700 border border-amber-200"
-              : "bg-red-50 text-red-700 border border-red-200"
-          }`}>
-            {message}
-          </div>
-        )}
+          {/* Login Form */}
+          <form onSubmit={submitLogin} className="space-y-4">
+            
+            {/* Email Field */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-200 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="admin@example.com"
+                disabled={loading}
+                className="w-full rounded-3xl border border-slate-300 bg-white/90 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+              />
+            </div>
+
+            {/* Password Field */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-200 mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="••••••••"
+                  disabled={loading}
+                  className="w-full rounded-3xl border border-slate-300 bg-white/90 px-4 py-3 pr-12 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-900"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-3xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3 font-bold hover:brightness-110 disabled:opacity-60 transition-all text-sm shadow-lg shadow-indigo-500/30"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                "Sign In →"
+              )}
+            </button>
+          </form>
+
+          {/* Footer Note */}
+          {setupMode === "normal" && (
+            <p className="mt-4 text-center text-xs text-slate-400">
+              Contact super admin if you need access.
+            </p>
+          )}
+
+        </div>
+        {/* End: Main Content Container */}
       </div>
+      {/* End: Card */}
     </div>
+    // End: Page Container
   );
 }

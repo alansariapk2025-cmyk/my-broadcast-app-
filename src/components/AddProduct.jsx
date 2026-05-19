@@ -1,9 +1,10 @@
 // src/components/AddProduct.jsx
 import { useState, useEffect, useCallback, useRef } from "react";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 import toast, { Toaster } from "react-hot-toast";
-import { FaBox, FaSave, FaImage, FaTimes, FaPercent, FaCalculator, FaSearch, FaCheckCircle, FaExclamationTriangle, FaSync, FaShieldAlt, FaCopy, FaRandom } from "react-icons/fa";
+import { FaBox, FaSave, FaImage, FaTimes, FaPercent, FaCalculator, FaSearch, FaCheckCircle, FaExclamationTriangle, FaSync, FaShieldAlt, FaCopy, FaRandom, FaLock } from "react-icons/fa";
+import { logActivity, ACTIONS } from "../utils/activityLogger";
 
 // Helpers
 const num = (v) => (typeof v === "number" && !isNaN(v) ? v : Number(v) || 0);
@@ -34,7 +35,7 @@ const PKRIcon = ({ className = "w-4 h-4" }) => (
   </svg>
 );
 
-export default function AddProduct() {
+export default function AddProduct({ assignedShopId = null, isStaff = false }) {
   // Product State
   const [product, setProduct] = useState({
     nameEn: "", nameUr: "", sku: "", description: "",
@@ -73,12 +74,20 @@ export default function AddProduct() {
   const MARGIN_PRESETS = [5, 10, 15, 20, 25, 30];
   const UNITS = ["Kg", "Gram", "Litre", "ML", "Dozen", "Packet", "Piece", "Box", "Bundle"];
 
-  // Fetch Shops
+  // Fetch Shops (STAFF: only their shop; SUPER_ADMIN: all shops)
   useEffect(() => {
     getDocs(collection(db, "shops")).then((snap) => {
       setShops(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     }).catch(() => toast.error("Failed to load shops!"));
   }, []);
+
+  // Auto-assign shop for STAFF
+  useEffect(() => {
+    if (isStaff && assignedShopId) {
+      handleShopChange(assignedShopId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStaff, assignedShopId]);
 
   // Check Duplicate Product
   useEffect(() => {
@@ -371,16 +380,32 @@ export default function AddProduct() {
         updatedAt: serverTimestamp(),
       });
 
+      // Log activity
+      await logActivity({
+        userId:     auth.currentUser?.uid || "",
+        userEmail:  auth.currentUser?.email || "",
+        userRole:   isStaff ? "STAFF" : "SUPER_ADMIN",
+        action:     ACTIONS.PRODUCT_ADD,
+        entityName: product.nameEn.trim(),
+        shopId:     product.shopId,
+      });
+
       toast.success("Product added successfully!", { id: t });
 
-      // Reset Form
+      // Reset Form — keep shopId locked for STAFF
       setProduct({
         nameEn: "", nameUr: "", sku: "", description: "",
         costPrice: "", price: "", mrpPrice: "", margin: 10,
         unit: "Kg", minQty: 1, orderLimit: 10, discount: "", stock: "",
-        status: "active", shopId: "", category: "", subcategory: "",
+        status: "active",
+        shopId: isStaff && assignedShopId ? assignedShopId : "",
+        category: "", subcategory: "",
         isPopular: false, isReselling: false, isFeatured: false,
       });
+      // Re-load categories for STAFF locked shop
+      if (isStaff && assignedShopId) {
+        handleShopChange(assignedShopId);
+      }
       setImageFile(null);
       setImagePreview(null);
       setCategories([]);
@@ -749,16 +774,28 @@ export default function AddProduct() {
                     <label className="block text-sm font-semibold text-gray-700 mb-1">
                       Shop <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={product.shopId}
-                      onChange={(e) => handleShopChange(e.target.value)}
-                      className={`w-full p-3 rounded-xl border-2 bg-white/80 backdrop-blur-sm outline-none transition ${
-                        errors.shopId ? "border-red-400" : "border-gray-200 focus:border-blue-500"
-                      }`}
-                    >
-                      <option value="">Select Shop</option>
-                      {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                    {isStaff ? (
+                      /* STAFF: locked to assigned shop */
+                      <div className="w-full p-3 rounded-xl border-2 border-indigo-200 bg-indigo-50 flex items-center gap-2">
+                        <FaLock className="w-4 h-4 text-indigo-500" />
+                        <span className="font-semibold text-indigo-700">
+                          {shops.find((s) => s.id === assignedShopId)?.name || assignedShopId || "Assigned Shop"}
+                        </span>
+                        <span className="ml-auto text-xs bg-indigo-200 text-indigo-700 px-2 py-0.5 rounded-full font-bold">LOCKED</span>
+                      </div>
+                    ) : (
+                      /* SUPER_ADMIN: full shop selector */
+                      <select
+                        value={product.shopId}
+                        onChange={(e) => handleShopChange(e.target.value)}
+                        className={`w-full p-3 rounded-xl border-2 bg-white/80 backdrop-blur-sm outline-none transition ${
+                          errors.shopId ? "border-red-400" : "border-gray-200 focus:border-blue-500"
+                        }`}
+                      >
+                        <option value="">Select Shop</option>
+                        {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    )}
                     {errors.shopId && <p className="text-red-500 text-xs mt-1">{errors.shopId}</p>}
                   </div>
                   <div>

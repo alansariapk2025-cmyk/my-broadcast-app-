@@ -24,7 +24,7 @@ const StockBadge = ({ stock }) => {
   return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700"><FaWarehouse className="w-3 h-3" /> {s}</span>;
 };
 
-export default function ProductList() {
+export default function ProductList({ assignedShopId = null, isStaff = false }) {
   const [allProducts, setAllProducts] = useState([]);
   const [categoriesMap, setCategoriesMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -118,6 +118,9 @@ export default function ProductList() {
 
   const filteredProducts = useMemo(() => {
     let list = [...allProducts];
+
+    // STAFF: always scope to assigned shop (Firestore rules also enforce this)
+    if (isStaff && assignedShopId) list = list.filter(p => p.shopId === assignedShopId);
 
     if (selectedCategory) list = list.filter(p => p.category === selectedCategory);
     if (statusFilter) list = list.filter(p => p.status === statusFilter);
@@ -355,7 +358,10 @@ export default function ProductList() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-2"><FaBox className="text-blue-600" /> Products</h1>
-          <p className="text-gray-500 text-sm">Index-free mode • local filters • low reads</p>
+          {isStaff && assignedShopId
+            ? <p className="text-indigo-600 text-xs font-semibold mt-0.5">🔒 Showing your assigned shop only</p>
+            : <p className="text-gray-500 text-sm">Index-free mode • local filters • low reads</p>
+          }
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isConnected ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
@@ -450,7 +456,7 @@ export default function ProductList() {
         <div className="flex gap-2">
           <button onClick={() => handleBulk("activate")} disabled={bulkUpdating} className="px-3 py-1.5 bg-green-500 rounded-lg text-sm font-semibold">Activate</button>
           <button onClick={() => handleBulk("deactivate")} disabled={bulkUpdating} className="px-3 py-1.5 bg-orange-500 rounded-lg text-sm font-semibold">Deactivate</button>
-          <button onClick={() => handleBulk("delete")} disabled={bulkUpdating} className="px-3 py-1.5 bg-red-500 rounded-lg text-sm font-semibold">Delete</button>
+          {!isStaff && <button onClick={() => handleBulk("delete")} disabled={bulkUpdating} className="px-3 py-1.5 bg-red-500 rounded-lg text-sm font-semibold">Delete</button>}
           <button onClick={() => setSelectedProducts([])} className="px-3 py-1.5 bg-white/20 rounded-lg text-sm font-semibold">Cancel</button>
         </div>
       </div>}

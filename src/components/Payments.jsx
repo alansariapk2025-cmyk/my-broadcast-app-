@@ -1,4 +1,4 @@
-﻿// src/pages/Payments.jsx
+// src/pages/Payments.jsx
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { db } from "../firebase";
 import {
@@ -24,7 +24,7 @@ import JsBarcode from "jsbarcode";
 
 const num = (v) => (typeof v === "number" && !isNaN(v) ? v : Number(v) || 0);
 
-// ΓöÇΓöÇ Default Print Settings ΓöÇΓöÇ
+// ── Default Print Settings ──
 const DEFAULT_SETTINGS = {
   paperWidth: 80,
   paperHeight: "auto",
@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS = {
   totalsSize: 12,
   grandTotalSize: 14,
   footerSize: 10,
-  // ΓöÇΓöÇ UPDATED: 4 columns instead of 3 ΓöÇΓöÇ
+  // ── UPDATED: 4 columns instead of 3 ──
   itemColWidth: 36,
   qtyColWidth: 14,
   rateColWidth: 22,
@@ -89,7 +89,7 @@ export default function Payments() {
   const [printSettings, setPrintSettings] = useState(loadSettings());
   const perPage = 15;
 
-  // ΓöÇΓöÇ Fetch Orders ΓöÇΓöÇ
+  // ── Fetch Orders ──
   useEffect(() => {
     const q = query(
       collection(db, "orders"),
@@ -114,7 +114,7 @@ export default function Payments() {
     return () => unsubscribe();
   }, []);
 
-  // ΓöÇΓöÇ Filter Orders ΓöÇΓöÇ
+  // ── Filter Orders ──
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return orders.filter((o) => {
@@ -162,10 +162,10 @@ export default function Payments() {
 
   const handleSaveSettings = () => {
     if (saveSettings(printSettings)) {
-      alert("Γ£à Settings saved successfully!");
+      alert("✅ Settings saved successfully!");
       setShowSettings(false);
     } else {
-      alert("Γ¥î Failed to save settings");
+      alert("❌ Failed to save settings");
     }
   };
 
@@ -180,7 +180,7 @@ export default function Payments() {
     setPrintSettings((prev) => ({ ...prev, [key]: value }));
   };
 
-  // ΓöÇΓöÇ Generate Invoice ΓöÇΓöÇ
+  // ── Generate Invoice ──
   const handleInvoice = useCallback(
     async (order) => {
       setInvoiceLoading(order.id);
@@ -207,7 +207,7 @@ export default function Payments() {
         const del = num(order.deliveryCharge ?? 0);
         const grand = num(order.grandTotal ?? sub + del);
 
-        // ΓöÇΓöÇ Barcode ΓöÇΓöÇ
+        // ── Barcode ──
         let barcodeDataUrl = "";
         if (s.showBarcode) {
           try {
@@ -227,9 +227,9 @@ export default function Payments() {
           }
         }
 
-        // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
-        // ΓöÇΓöÇ FIXED: 4 columns - Item | Qty | Rate | Amount ΓöÇΓöÇ
-        // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+        // ══════════════════════════════════════════════
+        // ── FIXED: 4 columns - Item | Qty | Rate | Amount ──
+        // ══════════════════════════════════════════════
         const itemsRowsHTML = items
           .map((item) => {
             const price = num(item?.price || 0);
@@ -291,7 +291,7 @@ export default function Payments() {
           s.paperHeight === "auto" ? "auto" : `${s.paperHeight}mm`;
         const pageStyle = `@page { size: ${s.paperWidth}mm ${paperHeight}; margin: ${s.margin}mm; }`;
 
-        // ΓöÇΓöÇ Invoice HTML ΓöÇΓöÇ
+        // ── Invoice HTML ──
         const invoiceHTML = `
           <div class="invoice-container" style="
             width: 100%;
@@ -344,9 +344,9 @@ export default function Payments() {
 
             <div style="border-top: 1px dashed ${s.textColor}; margin: 6px 0;"></div>
 
-            <!-- ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+            <!-- ═══════════════════════════════════════ -->
             <!-- ITEMS TABLE - 4 COLUMNS: Item|Qty|Rate|Amount -->
-            <!-- ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+            <!-- ═══════════════════════════════════════ -->
             <table style="
               width: 100%;
               border-collapse: collapse;
@@ -442,7 +442,7 @@ export default function Payments() {
           </div>
         `;
 
-        // ΓöÇΓöÇ Open Print Window ΓöÇΓöÇ
+        // ── Open Print Window ──
         const printWindow = window.open("", "", "height=900,width=400");
         printWindow.document.write(`
           <!DOCTYPE html>
@@ -493,7 +493,7 @@ export default function Payments() {
   return (
     <div className="p-6 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl shadow-2xl w-full max-w-7xl mx-auto overflow-auto border border-blue-200">
 
-      {/* ΓöÇΓöÇ Page Title with Settings Button ΓöÇΓöÇ */}
+      {/* ── Page Title with Settings Button ── */}
       <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <div>
           <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-indigo-700 tracking-tight">
@@ -512,7 +512,7 @@ export default function Payments() {
         </button>
       </div>
 
-      {/* ΓöÇΓöÇ Stats Bar ΓöÇΓöÇ */}
+      {/* ── Stats Bar ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
           { label: "Total Orders", value: orders.length, color: "from-blue-500 to-blue-600" },
@@ -527,7 +527,7 @@ export default function Payments() {
         ))}
       </div>
 
-      {/* ΓöÇΓöÇ Search + Filter ΓöÇΓöÇ */}
+      {/* ── Search + Filter ── */}
       <div className="flex flex-wrap gap-3 items-center justify-between mb-5">
         <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm flex-1 min-w-[240px]">
           <FaSearch className="text-gray-400 shrink-0" />
@@ -551,7 +551,7 @@ export default function Payments() {
         </select>
       </div>
 
-      {/* ΓöÇΓöÇ Table ΓöÇΓöÇ */}
+      {/* ── Table ── */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -575,7 +575,7 @@ export default function Payments() {
                   <tr>
                     <td colSpan="9" className="text-center py-16 text-gray-400">
                       <div className="flex flex-col items-center gap-2">
-                        <span className="text-4xl">≡ƒô¡</span>
+                        <span className="text-4xl">📭</span>
                         <span className="font-medium">No orders found</span>
                       </div>
                     </td>
@@ -593,7 +593,7 @@ export default function Payments() {
                         month: "short",
                         year: "numeric",
                       })
-                      : "ΓÇö";
+                      : "—";
                     const sub = num(o.subtotal ?? o.total ?? 0);
                     const del = num(o.deliveryCharge ?? 0);
                     const grand = num(o.grandTotal ?? sub + del);
@@ -610,19 +610,19 @@ export default function Payments() {
                           {o.orderId || `ORD-${String(i + 1).padStart(3, "0")}`}
                         </td>
                         <td className="px-4 py-3 font-medium whitespace-nowrap">
-                          {o.customerName || o.name || "ΓÇö"}
+                          {o.customerName || o.name || "—"}
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                          {o.customerPhone || o.phone || "ΓÇö"}
+                          {o.customerPhone || o.phone || "—"}
                         </td>
                         <td className="px-4 py-3 font-bold text-green-700 whitespace-nowrap">
                           Rs. {grand.toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                          {o.paymentMethod || "ΓÇö"}
+                          {o.paymentMethod || "—"}
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                          {o.deliveryType || "ΓÇö"}
+                          {o.deliveryType || "—"}
                         </td>
                         <td className="px-4 py-3">
                           <select
@@ -645,7 +645,7 @@ export default function Payments() {
                             >
                               {invoiceLoading === o.id ? (
                                 <>
-                                  <span className="inline-block animate-spin">ΓÅ│</span>
+                                  <span className="inline-block animate-spin">⏳</span>
                                   Wait...
                                 </>
                               ) : (
@@ -672,14 +672,14 @@ export default function Payments() {
             </table>
           </div>
 
-          {/* ΓöÇΓöÇ Pagination ΓöÇΓöÇ */}
+          {/* ── Pagination ── */}
           <div className="flex justify-center items-center mt-5 gap-2">
             <button
               onClick={() => setPage((p) => Math.max(p - 1, 1))}
               disabled={page === 1}
               className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg disabled:opacity-40 hover:bg-blue-700 transition"
             >
-              ΓåÉ Prev
+              ← Prev
             </button>
             <div className="flex gap-1">
               {Array.from({ length: Math.min(totalPages, 7) }, (_, idx) => {
@@ -703,20 +703,20 @@ export default function Payments() {
               disabled={page === totalPages}
               className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg disabled:opacity-40 hover:bg-blue-700 transition"
             >
-              Next ΓåÆ
+              Next →
             </button>
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-2">
-            Showing {(page - 1) * perPage + 1}ΓÇô
+            Showing {(page - 1) * perPage + 1}–
             {Math.min(page * perPage, filtered.length)} of {filtered.length} orders
           </p>
         </>
       )}
 
-      {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
-      {/* ΓöÇΓöÇ PRINT SETTINGS MODAL ΓöÇΓöÇ */}
-      {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+      {/* ═══════════════════════════════════════════ */}
+      {/* ── PRINT SETTINGS MODAL ── */}
+      {/* ═══════════════════════════════════════════ */}
       {showSettings && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -741,8 +741,8 @@ export default function Payments() {
             {/* Settings Body */}
             <div className="p-6 space-y-6">
 
-              {/* ΓöÇΓöÇ Paper Size Section ΓöÇΓöÇ */}
-              <Section title="≡ƒôä Paper Size & Margins">
+              {/* ── Paper Size Section ── */}
+              <Section title="📄 Paper Size & Margins">
                 <Field label="Paper Width (mm)">
                   <select
                     value={printSettings.paperWidth}
@@ -751,7 +751,7 @@ export default function Payments() {
                   >
                     <option value={58}>58mm (Small Thermal)</option>
                     <option value={72}>72mm (Medium Thermal)</option>
-                    <option value={80}>80mm (Standard Thermal) Γ¡É</option>
+                    <option value={80}>80mm (Standard Thermal) ⭐</option>
                     <option value={100}>100mm (Wide)</option>
                     <option value={210}>210mm (A4 Size)</option>
                   </select>
@@ -791,8 +791,8 @@ export default function Payments() {
                 </Field>
               </Section>
 
-              {/* ΓöÇΓöÇ Font Size Section ΓöÇΓöÇ */}
-              <Section title="≡ƒöñ Font Sizes (px)">
+              {/* ── Font Size Section ── */}
+              <Section title="🔤 Font Sizes (px)">
                 <Field label="Store Name">
                   <RangeInput value={printSettings.storeNameSize} min={12} max={28}
                     onChange={(v) => updateSetting("storeNameSize", v)} />
@@ -831,10 +831,10 @@ export default function Payments() {
                 </Field>
               </Section>
 
-              {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
-              {/* ΓöÇΓöÇ UPDATED: 4 Column Widths Section ΓöÇΓöÇ */}
-              {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
-              <Section title="≡ƒôè Table Column Widths (%) ΓÇö Item | Qty | Rate | Amount">
+              {/* ═══════════════════════════════════════ */}
+              {/* ── UPDATED: 4 Column Widths Section ── */}
+              {/* ═══════════════════════════════════════ */}
+              <Section title="📊 Table Column Widths (%) — Item | Qty | Rate | Amount">
                 <Field label={`Item Column: ${printSettings.itemColWidth}%`}>
                   <input
                     type="range"
@@ -876,18 +876,18 @@ export default function Payments() {
                   />
                 </Field>
                 <div className="col-span-full text-xs text-gray-500 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                  <strong>≡ƒÆí Column Total:</strong>{" "}
+                  <strong>💡 Column Total:</strong>{" "}
                   {printSettings.itemColWidth + printSettings.qtyColWidth + printSettings.rateColWidth + printSettings.amountColWidth}%
                   {" "}
                   {(printSettings.itemColWidth + printSettings.qtyColWidth + printSettings.rateColWidth + printSettings.amountColWidth) === 100
-                    ? <span className="text-green-600 font-bold">Γ£à Perfect!</span>
-                    : <span className="text-red-600 font-bold">ΓÜá∩╕Å Should be 100%</span>
+                    ? <span className="text-green-600 font-bold">✅ Perfect!</span>
+                    : <span className="text-red-600 font-bold">⚠️ Should be 100%</span>
                   }
                 </div>
               </Section>
 
-              {/* ΓöÇΓöÇ Store Info Section ΓöÇΓöÇ */}
-              <Section title="≡ƒÅ¬ Store Information">
+              {/* ── Store Info Section ── */}
+              <Section title="🏪 Store Information">
                 <Field label="Store Name" full>
                   <input
                     type="text"
@@ -930,8 +930,8 @@ export default function Payments() {
                 </Field>
               </Section>
 
-              {/* ΓöÇΓöÇ Other Options ΓöÇΓöÇ */}
-              <Section title="ΓÜÖ∩╕Å Other Options">
+              {/* ── Other Options ── */}
+              <Section title="⚙️ Other Options">
                 <Field label="Font Family">
                   <select
                     value={printSettings.fontFamily}
@@ -1029,7 +1029,7 @@ export default function Payments() {
   );
 }
 
-// ΓöÇΓöÇ Reusable Components ΓöÇΓöÇ
+// ── Reusable Components ──
 const Section = ({ title, children }) => (
   <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200">
     <h4 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">

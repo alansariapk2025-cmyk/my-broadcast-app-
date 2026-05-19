@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import {
   collection,
   addDoc,
@@ -9,10 +9,12 @@ import {
   updateDoc,
   Timestamp,
 } from "firebase/firestore";
+import { logActivity, ACTIONS } from "../utils/activityLogger";
+import { FaLock } from "react-icons/fa";
 
 const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY || "";
 
-export default function AddCategory() {
+export default function AddCategory({ assignedShopId = null, isStaff = false }) {
   const [shops, setShops] = useState([]);
   const [shopId, setShopId] = useState("");
   const [categories, setCategories] = useState([]);
@@ -44,6 +46,13 @@ export default function AddCategory() {
     };
     loadShops();
   }, []);
+
+  // 🔹 Auto-assign shop for STAFF
+  useEffect(() => {
+    if (isStaff && assignedShopId) {
+      setShopId(assignedShopId);
+    }
+  }, [isStaff, assignedShopId]);
 
   // 🔹 Fetch categories
   useEffect(() => {
@@ -107,11 +116,27 @@ export default function AddCategory() {
 
       if (editingCat) {
         await updateDoc(doc(db, "shops", shopId, "categories", editingCat.id), payload);
+        await logActivity({
+          userId: auth.currentUser?.uid || "",
+          userEmail: auth.currentUser?.email || "",
+          userRole: isStaff ? "STAFF" : "SUPER_ADMIN",
+          action: ACTIONS.CATEGORY_UPDATE,
+          entityName: catName.trim(),
+          shopId,
+        });
         alert("✅ Category updated successfully!");
       } else {
         await addDoc(collection(db, "shops", shopId, "categories"), {
           ...payload,
           createdAt: Timestamp.now(),
+        });
+        await logActivity({
+          userId: auth.currentUser?.uid || "",
+          userEmail: auth.currentUser?.email || "",
+          userRole: isStaff ? "STAFF" : "SUPER_ADMIN",
+          action: ACTIONS.CATEGORY_ADD,
+          entityName: catName.trim(),
+          shopId,
         });
         alert("✅ Category added successfully!");
       }
@@ -173,18 +198,30 @@ export default function AddCategory() {
       {/* 🔹 Shop Selector */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Select Shop</label>
-        <select
-          value={shopId}
-          onChange={(e) => setShopId(e.target.value)}
-          className="w-full p-3 rounded-xl border border-gray-300 bg-white/30"
-        >
-          <option value="">-- Select Shop --</option>
-          {shops.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+        {isStaff ? (
+          /* STAFF: locked to assigned shop */
+          <div className="w-full p-3 rounded-xl border-2 border-indigo-200 bg-indigo-50 flex items-center gap-2">
+            <FaLock className="w-4 h-4 text-indigo-500" />
+            <span className="font-semibold text-indigo-700">
+              {shops.find((s) => s.id === shopId)?.name || shopId || "Assigned Shop"}
+            </span>
+            <span className="ml-auto text-xs bg-indigo-200 text-indigo-700 px-2 py-0.5 rounded-full font-bold">LOCKED</span>
+          </div>
+        ) : (
+          /* SUPER_ADMIN: full shop selector */
+          <select
+            value={shopId}
+            onChange={(e) => setShopId(e.target.value)}
+            className="w-full p-3 rounded-xl border border-gray-300 bg-white/30"
+          >
+            <option value="">-- Select Shop --</option>
+            {shops.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* 🔹 Form */}
