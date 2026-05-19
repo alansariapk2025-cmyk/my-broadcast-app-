@@ -1,0 +1,61 @@
+﻿rules_version = "2";
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    match /admins/{adminId} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow create: if false;
+      allow update: if isAuth();
+      allow delete: if isAuth();
+    }
+
+    match /shops/{shopId} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    match /orders/{orderId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /customers/{customerId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /activityLogs/{logId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+  }
+}
