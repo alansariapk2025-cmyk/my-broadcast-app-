@@ -22,6 +22,7 @@ export default function AuthScreen() {
   const [initPending, setInitPending] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [setupMode, setSetupMode] = useState("normal");
+  const [loginRole, setLoginRole] = useState("super_admin");
 
   // ─────────────────────────────────────────────────────────────────
   // Check Admin Setup via Backend
@@ -114,27 +115,47 @@ export default function AuthScreen() {
 
       // Check admins/
       const adminSnap = await getDoc(doc(db, "admins", uid));
-      if (adminSnap.exists()) {
-        const d = adminSnap.data();
-        setMessage(
-          d.isDemo
-            ? "✅ Logged in with demo account."
-            : "✅ Logged in successfully."
-        );
-        return;
-      }
-
-      // Check users/
       const userSnap = await getDoc(doc(db, "users", uid));
-      if (userSnap.exists()) {
-        const d = userSnap.data();
-        if (d.status === "suspended") {
-          await auth.signOut();
-          setMessage("❌ Account suspended. Contact the super admin.");
+
+      if (loginRole === "super_admin") {
+        if (adminSnap.exists()) {
+          const d = adminSnap.data();
+          setMessage(
+            d.isDemo
+              ? "✅ Logged in with demo account."
+              : "✅ Super admin login successful."
+          );
           return;
         }
-        setMessage("✅ Logged in successfully.");
-        return;
+
+        if (userSnap.exists()) {
+          await auth.signOut();
+          setMessage(
+            "❌ This account is a staff user. Please choose Staff login."
+          );
+          return;
+        }
+      }
+
+      if (loginRole === "staff") {
+        if (userSnap.exists()) {
+          const d = userSnap.data();
+          if (d.status === "suspended") {
+            await auth.signOut();
+            setMessage("❌ Account suspended. Contact the super admin.");
+            return;
+          }
+          setMessage("✅ Staff login successful.");
+          return;
+        }
+
+        if (adminSnap.exists()) {
+          await auth.signOut();
+          setMessage(
+            "❌ This account is a super admin account. Please choose Super Admin login."
+          );
+          return;
+        }
       }
 
       await auth.signOut();
@@ -275,7 +296,24 @@ export default function AuthScreen() {
 
           {/* Login Form */}
           <form onSubmit={submitLogin} className="space-y-4">
-            
+            <div>
+              <label className="block text-sm font-semibold text-slate-200 mb-1">
+                Login As
+              </label>
+              <select
+                value={loginRole}
+                onChange={(e) => setLoginRole(e.target.value)}
+                disabled={loading || isFirstTime}
+                className="w-full rounded-3xl border border-slate-300 bg-white/90 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+              >
+                <option value="super_admin">Super Admin</option>
+                <option value="staff">Staff</option>
+              </select>
+              <p className="mt-2 text-xs text-slate-400">
+                Choose the login role before signing in.
+              </p>
+            </div>
+
             {/* Email Field */}
             <div>
               <label className="block text-sm font-semibold text-slate-200 mb-1">
@@ -339,7 +377,9 @@ export default function AuthScreen() {
           {/* Footer Note */}
           {setupMode === "normal" && (
             <p className="mt-4 text-center text-xs text-slate-400">
-              Contact super admin if you need access.
+              {loginRole === "super_admin"
+                ? "Super Admin must login with admin credentials."
+                : "Staff must login with assigned staff credentials."}
             </p>
           )}
 
