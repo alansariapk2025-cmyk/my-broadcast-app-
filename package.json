@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server.cjs",
+    "server:my-app": "node my-app/server.cjs",
     "server:dev": "nodemon server.cjs",
     "start": "node server.cjs"
   },
