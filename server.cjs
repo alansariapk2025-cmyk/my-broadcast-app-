@@ -1,9 +1,16 @@
-﻿/**
- * server.cjs
- * Production-ready backend for the multi-shop admin panel.
- * Handles Firebase Auth user creation, RBAC Firestore records,
- * demo admin bootstrapping, and secure status updates.
- */
+// ================================================================
+// 📁 server.cjs - FULL PRODUCTION VERSION
+// ✅ FCM Broadcast (existing)
+// ✅ RBAC: Staff/Admin User Management (existing)
+// ✅ Multi-Shop Support (NEW)
+// ✅ Demo Admin + Setup Check (NEW)
+// ================================================================
+// ARCHITECTURE NOTES:
+//   - All user/admin Firestore writes happen here via Admin SDK
+//     → bypasses security rules → no permission errors
+//   - Frontend NEVER writes to users/ or admins/ collections
+//   - Shops created here so we can set isDefault flag safely
+// ================================================================
 
 const express = require("express");
 const admin = require("firebase-admin");
@@ -13,32 +20,33 @@ const path = require("path");
 
 try {
   require("dotenv").config();
-} catch (dotenvErr) {
-  console.warn("âš ï¸ dotenv not loaded:", dotenvErr.message);
+} catch (e) {
+  console.log("⚠️ dotenv not available");
 }
 
-const PORT = Number(process.env.PORT || 5000);
 const app = express();
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// CORS + request logging
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-const allowedOrigins = [
-  /^http:\/\/localhost:\d+$/,
-  /^http:\/\/127\.0\.0\.1:\d+$/,
-  /^https:\/\/.*\.onrender\.com$/,
-  "https://my-broadcast-app.onrender.com",
-];
-
+// ================================================================
+// ✅ CORS
+// ================================================================
 app.use(
   cors({
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
-      const allow = allowedOrigins.some((pattern) =>
-        pattern instanceof RegExp ? pattern.test(origin) : pattern === origin
-      );
-      callback(null, allow);
+
+      const allowedOrigins = [
+        /^http:\/\/localhost:\d+$/,
+        /^http:\/\/127\.0\.0\.1:\d+$/,
+        /^https:\/\/.*\.onrender\.com$/,
+        "https://my-broadcast-app.onrender.com",
+      ];
+
+      const isAllowed = allowedOrigins.some((pattern) => {
+        if (pattern instanceof RegExp) return pattern.test(origin);
+        return pattern === origin;
+      });
+
+      callback(null, isAllowed);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -51,69 +59,30 @@ app.options("*", cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-app.use((req, res, next) => {
-  console.log(
-    `âœ… [${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${req.ip}`
-  );
-  if (req.body && Object.keys(req.body).length) {
-    console.log("   body:", JSON.stringify(req.body));
-  }
-  next();
-});
-
-function sendResult(res, { success, data = null, error = null }, status = 200) {
-  return res.status(status).json({ success, data, error });
-}
-
-function normalizeEmail(value) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-
-function validateEmail(email) {
-  return typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function validateRole(role) {
-  return ["STAFF", "SUPER_ADMIN"].includes(role);
-}
-
-function validateStatus(status) {
-  return ["active", "suspended"].includes(status);
-}
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Firebase initialization
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
+// ================================================================
+// ✅ Firebase Init
+// ================================================================
 let serviceAccount;
 
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    console.log("âœ… Firebase service account loaded from env");
+    console.log("✅ Firebase: ENV se load");
   } else {
-    const candidatePaths = [];
-    if (process.env.SERVICE_ACCOUNT_PATH) {
-      candidatePaths.push(process.env.SERVICE_ACCOUNT_PATH);
+    const keyPath =
+      process.env.SERVICE_ACCOUNT_PATH || "./serviceAccountKey.json";
+    if (!fs.existsSync(keyPath)) {
+      throw new Error(`File not found: ${keyPath}`);
     }
-    candidatePaths.push(path.join(__dirname, "serviceAccountKey.json"));
-    candidatePaths.push(path.join(__dirname, "my-app", "serviceAccountKey.json"));
-    candidatePaths.push(path.join(__dirname, "..", "my-app", "serviceAccountKey.json"));
-
-    const foundPath = candidatePaths.find((candidate) => fs.existsSync(candidate));
-    if (!foundPath) {
-      throw new Error(`Service account key not found at any of: ${candidatePaths.join(", ")}`);
-    }
-
-    serviceAccount = JSON.parse(fs.readFileSync(foundPath, "utf8"));
-    console.log(`✅ Firebase service account loaded from ${foundPath}`);
+    serviceAccount = JSON.parse(fs.readFileSync(keyPath, "utf8"));
+    console.log(`✅ Firebase: ${keyPath} se load`);
   }
 
   if (!serviceAccount.project_id || !serviceAccount.private_key) {
-    throw new Error("Invalid Firebase service account payload");
+    throw new Error("Invalid service account");
   }
-} catch (initError) {
-  console.error("âŒ Firebase initialization failed:", initError.message);
+} catch (err) {
+  console.error("❌ Firebase load failed:", err.message);
   process.exit(1);
 }
 
@@ -121,477 +90,774 @@ if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
-  console.log("âœ… Firebase Admin initialized");
+  console.log("✅ Firebase initialized");
 }
 
 const db = admin.firestore();
-const auth = admin.auth();
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Helper functions
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-async function doesAnyAdminExist() {
-  const adminSnapshot = await db.collection("admins").limit(10).get();
-  return adminSnapshot.docs.some((doc) => {
-    const role = doc.data()?.role;
-    return role === "admin" || role === "superadmin";
-  });
-}
-
-async function getShopById(shopId) {
-  if (!shopId) return null;
-  const shopDoc = await db.collection("shops").doc(shopId).get();
-  return shopDoc.exists ? shopDoc.data() : null;
-}
-
-function buildUserClaims(userRecord) {
-  const claims = {
-    role: userRecord.role,
-    status: userRecord.status,
-  };
-
-  if (userRecord.role === "STAFF") {
-    claims.assignedShopId = userRecord.assignedShopId || null;
-    claims.assignedShopName = userRecord.assignedShopName || null;
+// ================================================================
+// ✅ Helper Functions
+// ================================================================
+function chunkArray(array, size) {
+  const result = [];
+  for (let i = 0; i < array.length; i += size) {
+    result.push(array.slice(i, i + size));
   }
-
-  return claims;
+  return result;
 }
 
-async function linkExistingAuthUserByEmail(email, userProps, userDocPayload) {
-  try {
-    const existingUser = await auth.getUserByEmail(email);
-    const userDocRef = db.collection("users").doc(existingUser.uid);
-    const userDocSnapshot = await userDocRef.get();
+// ================================================================
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  PART A — HEALTH + ADMIN SETUP CHECK                          ║
+// ╚══════════════════════════════════════════════════════════════╝
+// ================================================================
 
-    if (userDocSnapshot.exists) {
-      return { alreadyLinked: true, uid: existingUser.uid };
-    }
-
-    await auth.updateUser(existingUser.uid, {
-      displayName: userProps.displayName,
-      disabled: userProps.disabled,
-    });
-
-    await auth.setCustomUserClaims(existingUser.uid, userProps.customClaims);
-    await userDocRef.set(userDocPayload);
-
-    return {
-      linked: true,
-      uid: existingUser.uid,
-      userDoc: userDocPayload,
-    };
-  } catch (error) {
-    return { error };
-  }
-}
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Serve static frontend when available
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-const distPath = path.join(__dirname, "dist");
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  console.log("âœ… Serving static dist folder");
-}
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Routes
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
+// ── Health endpoints ─────────────────────────────────────────────
 app.get("/", (req, res) => {
-  return sendResult(res, {
-    success: true,
-    data: {
-      service: "Admin RBAC API",
-      status: "online",
-      timestamp: new Date().toISOString(),
-      port: PORT,
-    },
+  res.json({
+    status: "online",
+    service: "POS Backend Server",
+    timestamp: new Date().toISOString(),
+    version: "5.0.0 (Multi-Shop + RBAC + FCM)",
   });
 });
 
-// Simple ping endpoint for health checks (matches my-app/server.cjs)
 app.get("/ping", (req, res) => {
-  return res.json({ pong: true, time: Date.now() });
+  res.json({ pong: true, time: Date.now() });
 });
 
+app.get("/health", (req, res) => {
+  res.json({
+    status: "✅ Healthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    firebase: { connected: admin.apps.length > 0 },
+    features: ["FCM", "RBAC", "Multi-Shop"],
+    port: process.env.PORT || 5000,
+  });
+});
+
+// ── NEW: Check admin setup ───────────────────────────────────────
+// Called by AuthScreen on mount → no unauth Firestore reads from client
+// Eliminates 400 Bad Request error
 app.get("/check-admin-setup", async (req, res) => {
   try {
-    const [adminDocs, superAdminUsers, demoAdmins] = await Promise.all([
-      db.collection("admins").limit(10).get(),
-      db.collection("users").where("role", "==", "SUPER_ADMIN").limit(1).get(),
-      db.collection("admins").where("isDemo", "==", true).limit(1).get(),
-    ]);
+    const snap = await db.collection("admins").get();
 
-    const hasLegacyAdmin = adminDocs.docs.some((doc) => {
-      const role = doc.data()?.role;
-      return role === "admin" || role === "superadmin";
+    let hasRealAdmin = false;
+    let hasDemoAdmin = false;
+
+    snap.forEach((doc) => {
+      const data = doc.data();
+      if (data?.isDemo === true) hasDemoAdmin = true;
+      else hasRealAdmin = true;
     });
 
-    return sendResult(res, {
+    res.json({
       success: true,
-      data: {
-        hasLegacyAdmin,
-        hasModernAdmin: superAdminUsers.size > 0,
-        hasDemoAdmin: demoAdmins.size > 0,
-        hasRealAdmin: hasLegacyAdmin || superAdminUsers.size > 0,
-      },
+      hasRealAdmin,
+      hasDemoAdmin,
+      totalAdmins: snap.size,
     });
-  } catch (error) {
-    console.error("âŒ /check-admin-setup error:", error);
-    return sendResult(res, {
-      success: false,
-      error: "Unable to verify admin setup status.",
-    }, 500);
+  } catch (err) {
+    console.error("❌ check-admin-setup:", err.message);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post("/init-demo-admin", async (req, res) => {
-  const demoEmail = "demo.admin@ansari.com";
-  const demoPassword = "Demo1234";
-  const demoFullName = "Demo Super Admin";
+// ================================================================
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  PART B — RBAC: USER MANAGEMENT                               ║
+// ╚══════════════════════════════════════════════════════════════╝
+// ================================================================
 
+// ── Create STAFF / SUPER_ADMIN user ──────────────────────────────
+// ✅ FIXED: Server now writes users/{uid} doc via Admin SDK
+//    Previously frontend tried setDoc() which was blocked by rules
+//    Now everything happens here in one atomic operation
+app.post("/create-staff-user", async (req, res) => {
   try {
-    const anyAdmin = await doesAnyAdminExist();
-    const modernSuperAdmin = await db
-      .collection("users")
-      .where("role", "==", "SUPER_ADMIN")
-      .limit(1)
-      .get();
+    const {
+      name,
+      email,
+      password,
+      role,
+      assignedShopId,
+      assignedShopName,
+      status,
+      createdBy,
+    } = req.body;
 
-    if (anyAdmin || modernSuperAdmin.size > 0) {
-      return sendResult(res, {
-        success: false,
-        error: "Admin setup already exists. Demo admin is not required.",
-      }, 409);
+    // ── Validation ──────────────────────────────────────────────
+    if (!name || !email || !password) {
+      return res
+        .status(400)
+        .json({ success: false, error: "name, email, password required." });
+    }
+    if (password.length < 6) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Password must be ≥ 6 chars." });
+    }
+    if (!["STAFF", "SUPER_ADMIN"].includes(role)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid role." });
+    }
+    if (role === "STAFF" && !assignedShopId) {
+      return res
+        .status(400)
+        .json({ success: false, error: "assignedShopId required for STAFF." });
     }
 
-    const userRecord = await auth.createUser({
-      email: demoEmail,
-      password: demoPassword,
-      displayName: demoFullName,
-      disabled: false,
+    const emailLower = email.trim().toLowerCase();
+
+    // ── Check if email already in Firebase Auth ─────────────────
+    try {
+      await admin.auth().getUserByEmail(emailLower);
+      return res
+        .status(400)
+        .json({ success: false, error: "Email already registered." });
+    } catch (e) {
+      if (e.code !== "auth/user-not-found") throw e;
+    }
+
+    // ── Create Firebase Auth user ───────────────────────────────
+    const userRecord = await admin.auth().createUser({
+      email: emailLower,
+      password,
+      displayName: name.trim(),
+      emailVerified: true,
     });
 
-    await auth.setCustomUserClaims(userRecord.uid, {
-      role: "SUPER_ADMIN",
-      status: "active",
+    const uid = userRecord.uid;
+
+    // ── Write users/ Firestore doc (Admin SDK bypasses rules) ────
+    await db.collection("users").doc(uid).set({
+      name: name.trim(),
+      email: emailLower,
+      role,
+      assignedShopId: role === "STAFF" ? (assignedShopId || null) : null,
+      assignedShopName: role === "STAFF" ? (assignedShopName || "") : null,
+      status: status || "active",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: createdBy || "superadmin",
+      // FCM compat fields (preserve push_tokens logic)
+      fcmToken: "",
+      pushEnabled: false,
+      isGuest: false,
+    });
+
+    console.log(`✅ User created: ${emailLower} (${role}) uid: ${uid}`);
+
+    return res.json({
+      success: true,
+      uid,
+      email: userRecord.email,
+      name: name.trim(),
+      role,
+      message: `User "${name}" created successfully.`,
+    });
+  } catch (error) {
+    console.error("❌ create-staff-user error:", error);
+    return res
+      .status(500)
+      .json({ success: false, error: error.message });
+  }
+});
+
+// ── Create Admin (legacy — backward compat with AdminUsers.jsx) ──
+app.post("/create-admin", async (req, res) => {
+  try {
+    const { fullName, email, password } = req.body;
+
+    if (!fullName || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "fullName, email, password required.",
+      });
+    }
+
+    const emailLower = email.trim().toLowerCase();
+
+    try {
+      await admin.auth().getUserByEmail(emailLower);
+      return res
+        .status(400)
+        .json({ success: false, error: "Email already exists." });
+    } catch (e) {
+      if (e.code !== "auth/user-not-found") throw e;
+    }
+
+    const userRecord = await admin.auth().createUser({
+      email: emailLower,
+      password,
+      displayName: fullName.trim(),
+      emailVerified: true,
     });
 
     await db.collection("admins").doc(userRecord.uid).set({
-      fullName: demoFullName,
+      fullName: fullName.trim(),
+      email: emailLower,
+      role: "admin",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      isDemo: false,
+    });
+
+    console.log(`✅ Admin created: ${emailLower} uid: ${userRecord.uid}`);
+    return res.json({
+      success: true,
+      uid: userRecord.uid,
+      email: userRecord.email,
+    });
+  } catch (error) {
+    console.error("❌ create-admin error:", error);
+    return res
+      .status(500)
+      .json({ success: false, error: error.message });
+  }
+});
+
+// ── Delete user (works for both admins/ and users/ collections) ──
+// Single endpoint for all auth deletions
+app.post("/delete-admin", async (req, res) => {
+  try {
+    const { uid } = req.body;
+    if (!uid)
+      return res.status(400).json({ success: false, error: "uid required." });
+
+    // Delete from Firebase Auth
+    try {
+      await admin.auth().deleteUser(uid);
+      console.log(`✅ Auth user deleted: ${uid}`);
+    } catch (e) {
+      console.warn(`⚠️ Auth delete skipped (${uid}):`, e.message);
+    }
+
+    // Clean up admins/ collection if exists
+    try {
+      await db.collection("admins").doc(uid).delete();
+    } catch (e) {
+      // Doc may not exist — fine
+    }
+
+    // Clean up users/ collection if exists
+    try {
+      await db.collection("users").doc(uid).delete();
+    } catch (e) {
+      // Doc may not exist — fine
+    }
+
+    return res.json({
+      success: true,
+      message: `User ${uid} deleted from Auth + Firestore.`,
+    });
+  } catch (error) {
+    console.error("❌ delete-admin error:", error);
+    return res
+      .status(500)
+      .json({ success: false, error: error.message });
+  }
+});
+
+// ── Alias for clarity — same as /delete-admin ────────────────────
+app.post("/delete-auth-user", async (req, res) => {
+  // Re-use delete-admin logic
+  req.url = "/delete-admin";
+  app._router.handle(req, res);
+});
+
+// ── Init Demo Admin (legacy — AuthScreen first-time setup) ───────
+app.post("/init-demo-admin", async (req, res) => {
+  try {
+    const demoEmail = "demo.admin@ansari.com";
+    const demoPassword = "Demo1234";
+    const demoName = "Demo Admin";
+
+    // Check if already exists in admins/
+    const existing = await db
+      .collection("admins")
+      .where("email", "==", demoEmail)
+      .get();
+
+    if (!existing.empty) {
+      return res.json({
+        success: true,
+        email: demoEmail,
+        password: demoPassword,
+        message: "Demo admin already exists.",
+      });
+    }
+
+    // Create or get Firebase Auth user
+    let uid;
+    try {
+      const u = await admin.auth().getUserByEmail(demoEmail);
+      uid = u.uid;
+    } catch (e) {
+      const u = await admin.auth().createUser({
+        email: demoEmail,
+        password: demoPassword,
+        displayName: demoName,
+        emailVerified: true,
+      });
+      uid = u.uid;
+    }
+
+    // Write to admins/ collection
+    await db.collection("admins").doc(uid).set({
+      fullName: demoName,
       email: demoEmail,
-      role: "superadmin",
+      role: "admin",
       isDemo: true,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    console.log(`âœ… Demo admin created: ${userRecord.uid}`);
-
-    return sendResult(res, {
+    console.log("✅ Demo admin initialized.");
+    return res.json({
       success: true,
-      data: {
-        uid: userRecord.uid,
-        email: demoEmail,
-        password: demoPassword,
-      },
+      email: demoEmail,
+      password: demoPassword,
     });
   } catch (error) {
-    console.error("âŒ /init-demo-admin failed:", error);
-    if (error.code === "auth/email-already-exists") {
-      return sendResult(res, {
-        success: true,
-        data: {
-          email: demoEmail,
-          password: demoPassword,
-          hint: "Demo admin already exists in Auth.",
-        },
-      });
-    }
-    return sendResult(res, {
-      success: false,
-      error: "Unable to initialize demo admin.",
-    }, 500);
+    console.error("❌ init-demo-admin error:", error);
+    return res
+      .status(500)
+      .json({ success: false, error: error.message });
   }
 });
 
-app.post("/create-staff-user", async (req, res) => {
+// ================================================================
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  PART C — MULTI-SHOP MANAGEMENT (NEW)                         ║
+// ╚══════════════════════════════════════════════════════════════╝
+// ================================================================
+
+// ── Create Shop ─────────────────────────────────────────────────
+app.post("/create-shop", async (req, res) => {
   try {
-    const rawName = req.body.name;
-    const rawEmail = normalizeEmail(req.body.email);
-    const password = req.body.password;
-    const role = req.body.role;
-    const assignedShopId = req.body.assignedShopId || null;
-    let assignedShopName = req.body.assignedShopName || null;
-    const status = req.body.status || "active";
-    const createdBy = req.body.createdBy || "system";
+    const { name, address, phone } = req.body;
 
-    const name = typeof rawName === "string" ? rawName.trim() : "";
+    if (!name?.trim()) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Shop name is required." });
+    }
 
-    if (!name) {
-      return sendResult(res, {
+    // Duplicate name check
+    const existing = await db
+      .collection("shops")
+      .where("name", "==", name.trim())
+      .get();
+
+    if (!existing.empty) {
+      return res.status(400).json({
         success: false,
-        error: "Name is required.",
-      }, 400);
+        error: "A shop with this name already exists.",
+      });
     }
 
-    if (!validateEmail(rawEmail)) {
-      return sendResult(res, {
-        success: false,
-        error: "Valid email is required.",
-      }, 400);
-    }
-
-    if (!password || password.length < 6) {
-      return sendResult(res, {
-        success: false,
-        error: "Password must be at least 6 characters.",
-      }, 400);
-    }
-
-    if (!validateRole(role)) {
-      return sendResult(res, {
-        success: false,
-        error: "Role must be STAFF or SUPER_ADMIN.",
-      }, 400);
-    }
-
-    if (!validateStatus(status)) {
-      return sendResult(res, {
-        success: false,
-        error: "Status must be active or suspended.",
-      }, 400);
-    }
-
-    if (role === "STAFF") {
-      if (!assignedShopId) {
-        return sendResult(res, {
-          success: false,
-          error: "Staff users must be assigned to a shop.",
-        }, 400);
-      }
-
-      const shop = await getShopById(assignedShopId);
-      if (!shop) {
-        return sendResult(res, {
-          success: false,
-          error: "Assigned shop not found.",
-        }, 400);
-      }
-      assignedShopName = assignedShopName || shop.name || null;
-    }
-
-    const userClaims = buildUserClaims({
-      role,
-      status,
-      assignedShopId,
-      assignedShopName,
-    });
-
-    const userRecord = await auth.createUser({
-      email: rawEmail,
-      password,
-      displayName: name,
-      disabled: status === "suspended",
-    });
-
-    await auth.setCustomUserClaims(userRecord.uid, userClaims);
-
-    const userDoc = {
-      name,
-      email: rawEmail,
-      role,
-      assignedShopId: role === "STAFF" ? assignedShopId : null,
-      assignedShopName: role === "STAFF" ? assignedShopName : null,
-      status,
-      createdBy,
+    const ref = db.collection("shops").doc(); // auto-ID
+    await ref.set({
+      name: name.trim(),
+      address: address?.trim() || "",
+      phone: phone?.trim() || "",
+      isDefault: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
+    });
 
-    await db.collection("users").doc(userRecord.uid).set(userDoc);
-
-    console.log(`âœ… Staff user created: ${userRecord.uid}`);
-
-    return sendResult(res, {
+    console.log(`✅ Shop created: ${name.trim()} (${ref.id})`);
+    return res.json({
       success: true,
-      data: {
-        uid: userRecord.uid,
-        user: userDoc,
+      id: ref.id,
+      name: name.trim(),
+    });
+  } catch (error) {
+    console.error("❌ create-shop error:", error);
+    return res
+      .status(500)
+      .json({ success: false, error: error.message });
+  }
+});
+
+// ── Delete Shop ─────────────────────────────────────────────────
+// Note: Does NOT cascade delete products/categories
+//       Frontend must reassign or warn user
+app.post("/delete-shop", async (req, res) => {
+  try {
+    const { shopId } = req.body;
+    if (!shopId)
+      return res
+        .status(400)
+        .json({ success: false, error: "shopId required." });
+
+    // Block deletion of default shop
+    const shopSnap = await db.collection("shops").doc(shopId).get();
+    if (!shopSnap.exists)
+      return res
+        .status(404)
+        .json({ success: false, error: "Shop not found." });
+
+    if (shopSnap.data().isDefault) {
+      return res.status(400).json({
+        success: false,
+        error: "Cannot delete default shop.",
+      });
+    }
+
+    // Check if any staff is assigned to this shop
+    const staffSnap = await db
+      .collection("users")
+      .where("assignedShopId", "==", shopId)
+      .get();
+
+    if (!staffSnap.empty) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot delete: ${staffSnap.size} staff user(s) are assigned to this shop. Reassign or delete them first.`,
+      });
+    }
+
+    await db.collection("shops").doc(shopId).delete();
+    console.log(`✅ Shop deleted: ${shopId}`);
+
+    return res.json({ success: true, message: `Shop ${shopId} deleted.` });
+  } catch (error) {
+    console.error("❌ delete-shop error:", error);
+    return res
+      .status(500)
+      .json({ success: false, error: error.message });
+  }
+});
+
+// ================================================================
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  PART D — FCM BROADCAST (EXISTING - UNCHANGED)                ║
+// ╚══════════════════════════════════════════════════════════════╝
+// ================================================================
+
+// ── Push Stats ──────────────────────────────────────────────────
+app.get("/push-stats", async (req, res) => {
+  try {
+    const [pushTokensSnapshot, usersSnapshot] = await Promise.all([
+      db.collection("push_tokens").get(),
+      db.collection("users").get(),
+    ]);
+
+    let enabledDevices = 0;
+    let fcmCount = 0;
+    let guestCount = 0;
+    let userCount = 0;
+
+    pushTokensSnapshot.forEach((doc) => {
+      const data = doc.data();
+
+      if (
+        data?.pushEnabled === true &&
+        data?.fcmToken &&
+        data.fcmToken.trim() !== ""
+      ) {
+        enabledDevices++;
+        fcmCount++;
+
+        if (data?.isGuest === true) guestCount++;
+        else userCount++;
+      }
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        total: pushTokensSnapshot.size,
+        enabled: enabledDevices,
+        fcm: fcmCount,
+        guests: guestCount,
+        users: userCount,
+        totalUsers: usersSnapshot.size,
       },
+      mode: "FCM_ONLY",
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("âŒ /create-staff-user error:", error);
-    if (error.code === "auth/email-already-exists") {
-      const fallback = await linkExistingAuthUserByEmail(rawEmail, {
-        displayName: name,
-        disabled: status === "suspended",
-        createdBy,
-        customClaims: userClaims,
-      }, {
-        name,
-        email: rawEmail,
-        role,
-        assignedShopId: role === "STAFF" ? assignedShopId : null,
-        assignedShopName: role === "STAFF" ? assignedShopName : null,
-        status,
-        createdBy,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    console.error("❌ Stats error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Send Broadcast (FCM ONLY) ───────────────────────────────────
+app.post("/send-broadcast", async (req, res) => {
+  try {
+    const { title, body, link } = req.body;
+
+    if (!title || !body) {
+      return res.status(400).json({
+        success: false,
+        error: "Title aur body required",
+      });
+    }
+
+    console.log("🚀 FCM Broadcast started:", { title, body });
+
+    const deviceTokenMap = new Map();
+
+    // Fetch push_tokens
+    try {
+      const pushSnap = await db
+        .collection("push_tokens")
+        .where("pushEnabled", "==", true)
+        .get();
+
+      pushSnap.forEach((doc) => {
+        const data = doc.data();
+        const deviceId = doc.id;
+
+        if (data.fcmToken && data.fcmToken.trim() !== "") {
+          deviceTokenMap.set(deviceId, {
+            id: deviceId,
+            token: data.fcmToken,
+            collection: "push_tokens",
+          });
+        }
       });
 
-      if (fallback.error) {
-        console.error("❌ Existing auth link failed:", fallback.error);
-        return sendResult(res, {
-          success: false,
-          error: "Email already exists in Auth, and could not be linked to a Firestore user.",
-        }, 400);
-      }
+      console.log(
+        `✅ push_tokens: ${pushSnap.size} total, ${deviceTokenMap.size} with FCM`
+      );
+    } catch (e) {
+      console.error("⚠️ push_tokens error:", e.message);
+    }
 
-      if (fallback.alreadyLinked) {
-        return sendResult(res, {
-          success: false,
-          error: "Email already exists and is already linked to a user record.",
-        }, 400);
-      }
+    // Fetch users (backup)
+    try {
+      const usersSnap = await db
+        .collection("users")
+        .where("pushEnabled", "==", true)
+        .get();
 
-      return sendResult(res, {
+      usersSnap.forEach((doc) => {
+        const data = doc.data();
+        const userId = doc.id;
+
+        if (deviceTokenMap.has(userId)) return;
+
+        if (data.fcmToken && data.fcmToken.trim() !== "") {
+          deviceTokenMap.set(userId, {
+            id: userId,
+            token: data.fcmToken,
+            collection: "users",
+          });
+        }
+      });
+
+      console.log(`✅ users: ${usersSnap.size} total`);
+    } catch (e) {
+      console.error("⚠️ users error:", e.message);
+    }
+
+    const allDevices = Array.from(deviceTokenMap.values());
+
+    console.log(`✅ Total FCM devices: ${allDevices.length}`);
+
+    if (allDevices.length === 0) {
+      return res.json({
         success: true,
-        data: {
-          uid: fallback.uid,
-          user: fallback.userDoc,
-          existingAuth: true,
-        },
+        message: "No FCM tokens found",
+        totalDevices: 0,
+        totalSent: 0,
+        invalidTokensRemoved: 0,
       });
     }
 
-    return sendResult(res, {
-      success: false,
-      error: "Failed to create staff user.",
-    }, 500);
-  }
-});
+    let fcmSuccess = 0;
+    let invalidTokensRemoved = 0;
 
-app.post("/delete-auth-user", async (req, res) => {
-  try {
-    const uid = typeof req.body.uid === "string" ? req.body.uid.trim() : "";
-    if (!uid) {
-      return sendResult(res, {
-        success: false,
-        error: "User UID is required.",
-      }, 400);
-    }
+    console.log(`📤 Sending to ${allDevices.length} FCM tokens...`);
 
-    const userDocRef = db.collection("users").doc(uid);
-    const userDocPromise = userDocRef.get();
-    const deleteAuthPromise = auth.deleteUser(uid).catch((deleteError) => {
-      if (deleteError.code === "auth/user-not-found") {
-        return null;
+    const fcmChunks = chunkArray(allDevices, 500);
+
+    for (const chunk of fcmChunks) {
+      try {
+        const response = await admin.messaging().sendEachForMulticast({
+          tokens: chunk.map((d) => d.token),
+          notification: { title, body },
+          data: {
+            link: link || "/home",
+            timestamp: Date.now().toString(),
+          },
+          android: {
+            priority: "high",
+            notification: {
+              channelId: "default",
+              sound: "default",
+              priority: "high",
+            },
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: "default",
+                badge: 1,
+              },
+            },
+          },
+        });
+
+        fcmSuccess += response.successCount;
+
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            const errorCode = resp.error?.code;
+
+            console.warn(
+              `⚠️ FCM error for ${chunk[idx].id}:`,
+              errorCode
+            );
+
+            if (
+              errorCode === "messaging/invalid-registration-token" ||
+              errorCode === "messaging/registration-token-not-registered"
+            ) {
+              db.collection(chunk[idx].collection)
+                .doc(chunk[idx].id)
+                .update({
+                  fcmToken: admin.firestore.FieldValue.delete(),
+                })
+                .catch(() => { });
+
+              invalidTokensRemoved++;
+              console.log(`🗑️ Removed invalid token: ${chunk[idx].id}`);
+            }
+          }
+        });
+      } catch (error) {
+        console.error("❌ FCM batch error:", error.message);
       }
-      throw deleteError;
-    });
-
-    const [userDoc] = await Promise.all([userDocPromise, deleteAuthPromise]);
-
-    if (userDoc.exists) {
-      await userDocRef.delete();
     }
 
-    console.log(`âœ… Deleted auth user and Firestore doc for uid: ${uid}`);
+    console.log(`✅ FCM sent: ${fcmSuccess}/${allDevices.length}`);
 
-    return sendResult(res, {
+    // Save history
+    try {
+      await db.collection("notification_history").add({
+        title,
+        body,
+        link: link || null,
+        totalDevices: allDevices.length,
+        totalSent: fcmSuccess,
+        invalidTokensRemoved,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("⚠️ History save failed:", error.message);
+    }
+
+    console.log(
+      `🎉 Complete: ${fcmSuccess} sent to ${allDevices.length} devices`
+    );
+
+    return res.json({
       success: true,
-      data: { uid },
+      totalDevices: allDevices.length,
+      totalSent: fcmSuccess,
+      invalidTokensRemoved,
+      message: `FCM sent to ${fcmSuccess}/${allDevices.length} devices`,
     });
   } catch (error) {
-    console.error("âŒ /delete-auth-user error:", error);
-    if (error.code === "auth/user-not-found") {
-      return sendResult(res, {
-        success: false,
-        error: "User does not exist in Authentication.",
-      }, 404);
-    }
-    return sendResult(res, {
+    console.error("❌ Broadcast error:", error);
+    return res.status(500).json({
       success: false,
-      error: "Failed to delete user.",
-    }, 500);
+      error: error.message,
+    });
   }
 });
 
-app.post("/update-user-status", async (req, res) => {
+// ── Notification History ────────────────────────────────────────
+app.get("/notification-history", async (req, res) => {
   try {
-    const uid = typeof req.body.uid === "string" ? req.body.uid.trim() : "";
-    const status = typeof req.body.status === "string" ? req.body.status.trim() : "";
+    const limit = parseInt(req.query.limit) || 20;
 
-    if (!uid || !validateStatus(status)) {
-      return sendResult(res, {
-        success: false,
-        error: "Valid uid and status are required.",
-      }, 400);
-    }
+    const snapshot = await db
+      .collection("notification_history")
+      .orderBy("sentAt", "desc")
+      .limit(limit)
+      .get();
 
-    const userDocRef = db.collection("users").doc(uid);
-    const snapshot = await userDocRef.get();
+    const history = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+      sentAt: doc.data().sentAt?.toDate?.()?.toISOString() || null,
+    }));
 
-    if (!snapshot.exists) {
-      return sendResult(res, {
-        success: false,
-        error: "Firestore user document not found.",
-      }, 404);
-    }
-
-    const userData = snapshot.data();
-    const updatedUser = {
-      ...userData,
-      status,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await userDocRef.update({
-      status,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    await auth.updateUser(uid, { disabled: status === "suspended" });
-    await auth.setCustomUserClaims(uid, buildUserClaims(updatedUser));
-
-    console.log(`âœ… User status updated (${uid}) -> ${status}`);
-
-    return sendResult(res, {
+    res.json({
       success: true,
-      data: { uid, status },
+      history,
+      count: history.length,
     });
   } catch (error) {
-    console.error("âŒ /update-user-status error:", error);
-    return sendResult(res, {
+    console.error("❌ History error:", error);
+    res.status(500).json({
       success: false,
-      error: "Unable to update user status.",
-    }, 500);
+      error: error.message,
+    });
   }
 });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Catch-all and error handling
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ================================================================
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  PART E — FRONTEND SERVING + CATCH-ALL                        ║
+// ╚══════════════════════════════════════════════════════════════╝
+// ================================================================
 
-app.use((req, res) => {
-  return sendResult(res, {
-    success: false,
-    error: "Endpoint not found.",
-  }, 404);
+const distPath = path.join(__dirname, "dist");
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  console.log("✅ Serving dist/");
+}
+
+app.get("*", (req, res) => {
+  const distIndex = path.join(__dirname, "dist", "index.html");
+  if (fs.existsSync(distIndex)) {
+    res.sendFile(distIndex);
+  } else {
+    res.status(404).json({ error: "Not found" });
+  }
 });
 
-app.use((err, req, res, next) => {
-  console.error("ðŸ”¥ Unexpected server error:", err);
-  return sendResult(res, {
-    success: false,
-    error: "Unexpected server error.",
-  }, 500);
+// ================================================================
+// ✅ Start Server
+// ================================================================
+const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
+
+app.listen(PORT, HOST, () => {
+  console.log("\n" + "=".repeat(60));
+  console.log("🚀 POS Backend Server (v5.0 — Multi-Shop)");
+  console.log("=".repeat(60));
+  console.log(`📍 http://localhost:${PORT}`);
+  console.log("");
+  console.log("📊 Endpoints:");
+  console.log("   GET  /health");
+  console.log("   GET  /check-admin-setup       ← AuthScreen mount");
+  console.log("   GET  /push-stats");
+  console.log("   GET  /notification-history");
+  console.log("");
+  console.log("👥 RBAC:");
+  console.log("   POST /create-staff-user       ← STAFF/SUPER_ADMIN");
+  console.log("   POST /create-admin            ← Legacy admin");
+  console.log("   POST /delete-admin            ← Delete any user");
+  console.log("   POST /delete-auth-user        ← Alias");
+  console.log("   POST /init-demo-admin");
+  console.log("");
+  console.log("🏬 Shops:");
+  console.log("   POST /create-shop");
+  console.log("   POST /delete-shop");
+  console.log("");
+  console.log("🔔 Notifications:");
+  console.log("   POST /send-broadcast");
+  console.log("=".repeat(60));
+  console.log(`✅ Firebase Project: ${serviceAccount.project_id}`);
+  console.log("=".repeat(60) + "\n");
 });
 
-app.listen(PORT, () => {
-  console.log(`âœ… Server running on port ${PORT}`);
-});
+process.on("SIGTERM", () => process.exit(0));
+process.on("SIGINT", () => process.exit(0));

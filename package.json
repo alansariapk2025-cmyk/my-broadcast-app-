@@ -11,8 +11,9 @@
     "server": "node server.cjs",
     "server:my-app": "node my-app/server.cjs",
     "server:dev": "nodemon server.cjs",
-    "start": "node server.cjs"
-  },
+    "start": "node server.cjs",
+    "migrate": "node scripts/migrate-shopid.cjs"
+  }
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "@tailwindcss/vite": "^4.1.10",

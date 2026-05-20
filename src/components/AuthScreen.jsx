@@ -7,7 +7,6 @@ import { Eye, EyeOff } from "lucide-react";
 import { auth, db } from "../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import toast, { Toaster } from "react-hot-toast";
 
 const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL ||
@@ -23,7 +22,6 @@ export default function AuthScreen() {
   const [initPending, setInitPending] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [setupMode, setSetupMode] = useState("normal");
-  const [loginRole, setLoginRole] = useState("super_admin");
 
   // ─────────────────────────────────────────────────────────────────
   // Check Admin Setup via Backend
@@ -42,8 +40,17 @@ export default function AuthScreen() {
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        await res.json();
-        setSetupMode("normal");
+        const data = await res.json();
+
+        if (data.hasRealAdmin) {
+          setSetupMode("normal");
+        } else if (data.hasDemoAdmin) {
+          setSetupMode("demo_only");
+          setEmail("demo.admin@ansari.com");
+          setPassword("Demo1234");
+        } else {
+          setSetupMode("first_time");
+        }
       } catch (err) {
         console.warn("⚠️ Setup check fallback:", err.message);
         setSetupMode("normal");
@@ -54,6 +61,35 @@ export default function AuthScreen() {
 
     checkSetup();
   }, []);
+
+  // ─────────────────────────────────────────────────────────────────
+  // Initialize Demo Admin
+  // ─────────────────────────────────────────────────────────────────
+  const createDemoAdmin = async () => {
+    setInitPending(true);
+    setMessage("🔧 Creating demo admin account...");
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/init-demo-admin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to create demo admin");
+      }
+
+      setMessage(
+        "✅ Demo account created successfully. Sign in with the new admin account."
+      );
+      setSetupMode("demo_only");
+    } catch (err) {
+      setMessage(`❌ ${err.message}`);
+    } finally {
+      setInitPending(false);
+    }
+  };
 
   // ─────────────────────────────────────────────────────────────────
   // Login Handler
@@ -78,57 +114,33 @@ export default function AuthScreen() {
 
       // Check admins/
       const adminSnap = await getDoc(doc(db, "admins", uid));
-      const userSnap = await getDoc(doc(db, "users", uid));
-
-      if (loginRole === "super_admin") {
-        if (adminSnap.exists()) {
-          const d = adminSnap.data();
-          const successText = d.isDemo
+      if (adminSnap.exists()) {
+        const d = adminSnap.data();
+        setMessage(
+          d.isDemo
             ? "✅ Logged in with demo account."
-            : "✅ Super admin login successful.";
-          setMessage(successText);
-          toast.success(successText);
-          return;
-        }
-
-        if (userSnap.exists()) {
-          await auth.signOut();
-          const errorText = "❌ This account is a staff user. Please choose Staff login.";
-          setMessage(errorText);
-          toast.error(errorText);
-          return;
-        }
+            : "✅ Logged in successfully."
+        );
+        return;
       }
 
-      if (loginRole === "staff") {
-        if (userSnap.exists()) {
-          const d = userSnap.data();
-          if (d.status === "suspended") {
-            await auth.signOut();
-            const errorText = "❌ Account suspended. Contact the super admin.";
-            setMessage(errorText);
-            toast.error(errorText);
-            return;
-          }
-          const successText = "✅ Staff login successful.";
-          setMessage(successText);
-          toast.success(successText);
-          return;
-        }
-
-        if (adminSnap.exists()) {
+      // Check users/
+      const userSnap = await getDoc(doc(db, "users", uid));
+      if (userSnap.exists()) {
+        const d = userSnap.data();
+        if (d.status === "suspended") {
           await auth.signOut();
-          const errorText = "❌ This account is a super admin account. Please choose Super Admin login.";
-          setMessage(errorText);
-          toast.error(errorText);
+          setMessage("❌ Account suspended. Contact the super admin.");
           return;
         }
+        setMessage("✅ Logged in successfully.");
+        return;
       }
 
       await auth.signOut();
-      const errorText = "❌ This account is not authorized to access the admin panel.";
-      setMessage(errorText);
-      toast.error(errorText);
+      setMessage(
+        "❌ This account is not authorized to access the admin panel."
+      );
     } catch (err) {
       const credErrors = [
         "auth/invalid-email",
@@ -137,11 +149,15 @@ export default function AuthScreen() {
         "auth/invalid-credential",
       ];
 
-      const errorText = credErrors.includes(err.code)
-        ? "❌ Invalid email or password."
-        : `❌ ${err.message}`;
-      setMessage(errorText);
-      toast.error(errorText);
+      if (credErrors.includes(err.code)) {
+        setMessage(
+          setupMode === "first_time"
+            ? "⚠️ Demo account not found. Click 'Initialize Demo Admin'."
+            : "❌ Invalid email or password."
+        );
+      } else {
+        setMessage(`❌ ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -164,6 +180,8 @@ export default function AuthScreen() {
   // ─────────────────────────────────────────────────────────────────
   // Computed Values
   // ─────────────────────────────────────────────────────────────────
+  const isFirstTime = setupMode === "first_time";
+  const isDemoOnly = setupMode === "demo_only";
   const alertVariant = message.startsWith("✅")
     ? "success"
     : message.startsWith("⚠️")
@@ -202,6 +220,30 @@ export default function AuthScreen() {
           </div>
 
           {/* First Time Setup Banner */}
+          {(isFirstTime || isDemoOnly) && (
+            <div className="rounded-[28px] border border-slate-700/70 bg-slate-950/70 p-4 mb-6 text-sm text-slate-200 shadow-lg shadow-black/20">
+              <div className="font-semibold mb-2 text-slate-50">
+                {isFirstTime ? "First Time Setup" : "Demo Mode"}
+              </div>
+              <p className="text-slate-300">
+                {isFirstTime
+                  ? "No admin user exists yet. Initialize a demo account to start."
+                  : "A demo admin account is available for initial access."}
+              </p>
+
+              {isFirstTime && (
+                <button
+                  onClick={createDemoAdmin}
+                  disabled={initPending}
+                  className="mt-4 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-500/30 transition hover:brightness-110 disabled:opacity-60"
+                >
+                  {initPending
+                    ? "Creating demo admin..."
+                    : "Initialize Demo Admin"}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Alert Message */}
           {message && (
@@ -233,24 +275,7 @@ export default function AuthScreen() {
 
           {/* Login Form */}
           <form onSubmit={submitLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-200 mb-1">
-                Login As
-              </label>
-              <select
-                value={loginRole}
-                onChange={(e) => setLoginRole(e.target.value)}
-                disabled={loading}
-                className="w-full rounded-3xl border border-slate-300 bg-white/90 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
-              >
-                <option value="super_admin">Super Admin</option>
-                <option value="staff">Staff</option>
-              </select>
-              <p className="mt-2 text-xs text-slate-400">
-                Choose the login role before signing in.
-              </p>
-            </div>
-
+            
             {/* Email Field */}
             <div>
               <label className="block text-sm font-semibold text-slate-200 mb-1">
@@ -314,12 +339,9 @@ export default function AuthScreen() {
           {/* Footer Note */}
           {setupMode === "normal" && (
             <p className="mt-4 text-center text-xs text-slate-400">
-              {loginRole === "super_admin"
-                ? "Super Admin must login with admin credentials."
-                : "Staff must login with assigned staff credentials."}
+              Contact super admin if you need access.
             </p>
           )}
-          <Toaster position="top-right" />
 
         </div>
         {/* End: Main Content Container */}
