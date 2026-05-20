@@ -213,6 +213,11 @@ app.get("/", (req, res) => {
   });
 });
 
+// Simple ping endpoint for health checks (matches my-app/server.cjs)
+app.get("/ping", (req, res) => {
+  return res.json({ pong: true, time: Date.now() });
+});
+
 app.get("/check-admin-setup", async (req, res) => {
   try {
     const [adminDocs, superAdminUsers, demoAdmins] = await Promise.all([
