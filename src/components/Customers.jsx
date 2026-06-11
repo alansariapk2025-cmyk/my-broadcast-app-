@@ -1,33 +1,46 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { db } from "../firebase";
 import { FaSearch } from "react-icons/fa";
+import { Users } from "lucide-react";
+import { useShop } from "../contexts/ShopContext";
+import { filterByShop } from "../utils/shopUtils";
+import notify from "../utils/notify";
+import PageShell, { SectionCard } from "./ui/PageShell";
 
 const num = (v) => (typeof v === "number" && !isNaN(v) ? v : Number(v) || 0);
 
-export default function Users() {
+export default function Customers({ assignedShopId: propShopId }) {
+  const { effectiveShopId: ctxShopId } = useShop();
+  const effectiveShopId = propShopId || ctxShopId;
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const perPage = 20;
 
-  // 🔹 Orders se customers nikaalo
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (effectiveShopId) list = filterByShop(list, effectiveShopId);
+      setOrders(list);
+    } catch (err) {
+      console.error("Orders fetch error:", err);
+      notify.error("Failed to load customers");
+    } finally {
+      setLoading(false);
+    }
+  }, [effectiveShopId]);
+
   useEffect(() => {
-    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Orders fetch error:", err);
-        setLoading(false);
-      }
-    );
-    return () => unsub();
-  }, []);
+    fetchOrders();
+    const timer = setInterval(fetchOrders, 120_000);
+    return () => clearInterval(timer);
+  }, [fetchOrders]);
 
   // 🔹 Orders -> unique customers aggregate
   const customers = useMemo(() => {
@@ -91,105 +104,98 @@ export default function Users() {
   const current = filtered.slice((page - 1) * perPage, page * perPage);
 
   return (
-    <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-xl w-full max-w-7xl mx-auto overflow-auto border border-blue-200 backdrop-blur-md">
-      <h2 className="text-3xl font-bold text-blue-700 mb-6 text-center">
-        👥 Customers (from Orders)
-      </h2>
-
-      {/* 🔍 Search */}
-      <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
-        <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm">
-          <FaSearch className="text-gray-500" />
+    <PageShell
+      title="Customers"
+      subtitle={`Total customers: ${customers.length}`}
+      icon={Users}
+    >
+      <div className="theme-card theme-glass p-4 flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex items-center gap-2 theme-card-inner px-3 py-2 rounded-xl flex-1 min-w-[240px]">
+          <FaSearch className="theme-page-muted shrink-0" />
           <input
             type="text"
             placeholder="Search by name, email, phone, address..."
-            className="outline-none bg-transparent"
+            className="outline-none bg-transparent w-full theme-page-title text-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <span className="text-sm text-gray-600">
-          Total customers: {customers.length}
-        </span>
       </div>
 
-      {/* 📋 Table */}
       {loading ? (
-        <div className="text-center text-gray-600 py-10 text-lg animate-pulse">
+        <div className="text-center theme-page-muted py-10 text-lg animate-pulse">
           Loading customers...
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-xl shadow-lg">
-            <table className="w-full text-sm text-left text-gray-800">
-              <thead className="bg-blue-200/70 text-blue-900 font-semibold">
-                <tr>
-                  <th className="p-3">#</th>
-                  <th className="p-3">Name</th>
-                  <th className="p-3">Email</th>
-                  <th className="p-3">Phone</th>
-                  <th className="p-3">Address</th>
-                  <th className="p-3">Orders</th>
-                  <th className="p-3">Total Spent</th>
-                  <th className="p-3">Last Order</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white">
-                {current.length === 0 ? (
+          <SectionCard>
+            <div className="overflow-x-auto -mx-5 px-5">
+              <table className="w-full text-sm text-left">
+                <thead>
                   <tr>
-                    <td colSpan="8" className="text-center p-6 text-gray-500">
-                      💭 No customers found.
-                    </td>
+                    <th className="p-3">#</th>
+                    <th className="p-3">Name</th>
+                    <th className="p-3">Email</th>
+                    <th className="p-3">Phone</th>
+                    <th className="p-3">Address</th>
+                    <th className="p-3">Orders</th>
+                    <th className="p-3">Total Spent</th>
+                    <th className="p-3">Last Order</th>
                   </tr>
-                ) : (
-                  current.map((user, index) => (
-                    <tr
-                      key={user.id}
-                      className="border-t border-blue-100 hover:bg-blue-50/70 transition"
-                    >
-                      <td className="p-3">
-                        {(page - 1) * perPage + index + 1}
-                      </td>
-                      <td className="p-3">{user.name}</td>
-                      <td className="p-3">{user.email}</td>
-                      <td className="p-3">{user.phone}</td>
-                      <td className="p-3">{user.address}</td>
-                      <td className="p-3 font-semibold">{user.ordersCount}</td>
-                      <td className="p-3 font-semibold text-green-700">
-                        PKR {user.totalSpent.toLocaleString()}
-                      </td>
-                      <td className="p-3 text-xs text-gray-600">
-                        {user.lastOrderAt.toLocaleString()}
+                </thead>
+                <tbody>
+                  {current.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="text-center p-6 theme-page-muted">
+                        No customers found.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    current.map((user, index) => (
+                      <tr key={user.id} className="border-t theme-card-inner">
+                        <td className="p-3">{(page - 1) * perPage + index + 1}</td>
+                        <td className="p-3">{user.name}</td>
+                        <td className="p-3">{user.email}</td>
+                        <td className="p-3">{user.phone}</td>
+                        <td className="p-3">{user.address}</td>
+                        <td className="p-3 font-semibold">{user.ordersCount}</td>
+                        <td className="p-3 font-semibold text-blue-500">
+                          PKR {user.totalSpent.toLocaleString()}
+                        </td>
+                        <td className="p-3 text-xs theme-page-muted">
+                          {user.lastOrderAt.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
 
-          {/* Pagination */}
-          <div className="flex justify-center mt-4 gap-2">
+          <div className="flex justify-center gap-2">
             <button
+              type="button"
               onClick={() => setPage((p) => Math.max(p - 1, 1))}
               disabled={page === 1}
-              className="px-3 py-1 bg-blue-500 text-white rounded-lg disabled:opacity-40"
+              className="theme-btn-secondary text-sm disabled:opacity-40"
             >
               Prev
             </button>
-            <span className="px-3 py-1 font-semibold">
+            <span className="px-3 py-1 font-semibold theme-page-title">
               Page {page} of {totalPages}
             </span>
             <button
+              type="button"
               onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
               disabled={page === totalPages}
-              className="px-3 py-1 bg-blue-500 text-white rounded-lg disabled:opacity-40"
+              className="theme-btn-secondary text-sm disabled:opacity-40"
             >
               Next
             </button>
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

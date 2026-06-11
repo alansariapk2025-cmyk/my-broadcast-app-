@@ -185,8 +185,13 @@ app.post("/create-staff-user", async (req, res) => {
       assignedShopId,
       assignedShopName,
       status,
+      permissions,
       createdBy,
     } = req.body;
+
+    const DEFAULT_STAFF_PERMS = [
+      "staffDashboard", "product", "productList", "category",
+    ];
 
     // ── Validation ──────────────────────────────────────────────
     if (!name || !email || !password) {
@@ -202,7 +207,7 @@ app.post("/create-staff-user", async (req, res) => {
     if (!["STAFF", "SUPER_ADMIN"].includes(role)) {
       return res
         .status(400)
-        .json({ success: false, error: "Invalid role." });
+        .json({ success: false, error: "Invalid role. Use STAFF or SUPER_ADMIN." });
     }
     if (role === "STAFF" && !assignedShopId) {
       return res
@@ -239,6 +244,12 @@ app.post("/create-staff-user", async (req, res) => {
       role,
       assignedShopId: role === "STAFF" ? (assignedShopId || null) : null,
       assignedShopName: role === "STAFF" ? (assignedShopName || "") : null,
+      permissions:
+        role === "SUPER_ADMIN"
+          ? []
+          : Array.isArray(permissions) && permissions.length > 0
+          ? permissions
+          : DEFAULT_STAFF_PERMS,
       status: status || "active",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       createdBy: createdBy || "superadmin",
@@ -263,6 +274,172 @@ app.post("/create-staff-user", async (req, res) => {
     return res
       .status(500)
       .json({ success: false, error: error.message });
+  }
+});
+
+// ── Check email duplicate ──
+app.post("/check-email-exists", async (req, res) => {
+  try {
+    const emailLower = String(req.body?.email || "").trim().toLowerCase();
+    if (!emailLower) {
+      return res.status(400).json({ success: false, error: "email required" });
+    }
+    let exists = false;
+    try {
+      await admin.auth().getUserByEmail(emailLower);
+      exists = true;
+    } catch (e) {
+      if (e.code !== "auth/user-not-found") throw e;
+    }
+    if (!exists) {
+      const snap = await db.collection("users").where("email", "==", emailLower).limit(1).get();
+      exists = !snap.empty;
+    }
+    return res.json({ success: true, exists });
+  } catch (error) {
+    console.error("check-email-exists error:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Update user status (active / suspended) ──
+app.post("/update-user-status", async (req, res) => {
+  try {
+    const { uid, status } = req.body;
+    if (!uid || !["active", "suspended"].includes(status)) {
+      return res.status(400).json({ success: false, error: "uid and valid status required" });
+    }
+    const userRef = db.collection("users").doc(uid);
+    const doc = await userRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+    await userRef.update({
+      status,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    try {
+      await admin.auth().updateUser(uid, { disabled: status === "suspended" });
+    } catch (e) {
+      console.warn("Auth disable skipped:", e.message);
+    }
+    return res.json({ success: true, status });
+  } catch (error) {
+    console.error("update-user-status error:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Update user profile (name, role, shop, status, optional password) ──
+app.post("/update-user", async (req, res) => {
+  try {
+    const {
+      uid,
+      name,
+      role,
+      assignedShopId,
+      assignedShopName,
+      status,
+      password,
+      updatedBy,
+    } = req.body;
+
+    if (!uid) {
+      return res.status(400).json({ success: false, error: "uid required" });
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    const doc = await userRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    const current = doc.data();
+    const nextRole = role || current.role;
+
+    if (!["STAFF", "SUPER_ADMIN"].includes(nextRole)) {
+      return res.status(400).json({ success: false, error: "Invalid role" });
+    }
+    if (nextRole === "STAFF" && !assignedShopId && !current.assignedShopId) {
+      return res.status(400).json({ success: false, error: "Shop required for STAFF" });
+    }
+    if (password && password.length < 8) {
+      return res.status(400).json({ success: false, error: "Password must be at least 8 characters" });
+    }
+    if (password && !/[A-Za-z]/.test(password)) {
+      return res.status(400).json({ success: false, error: "Password must include a letter" });
+    }
+    if (password && !/[0-9]/.test(password)) {
+      return res.status(400).json({ success: false, error: "Password must include a number" });
+    }
+
+    const firestorePatch = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: updatedBy || "super_admin",
+    };
+
+    if (name?.trim()) firestorePatch.name = name.trim();
+    if (role) firestorePatch.role = nextRole;
+    if (status && ["active", "suspended"].includes(status)) firestorePatch.status = status;
+
+    if (nextRole === "STAFF") {
+      firestorePatch.assignedShopId = assignedShopId || current.assignedShopId || null;
+      firestorePatch.assignedShopName = assignedShopName || current.assignedShopName || "";
+    } else {
+      firestorePatch.assignedShopId = null;
+      firestorePatch.assignedShopName = null;
+    }
+
+    const authPatch = {};
+    if (name?.trim()) authPatch.displayName = name.trim();
+    if (password) authPatch.password = password;
+    if (status === "suspended") authPatch.disabled = true;
+    if (status === "active") authPatch.disabled = false;
+
+    if (Object.keys(authPatch).length > 0) {
+      await admin.auth().updateUser(uid, authPatch);
+    }
+
+    await userRef.update(firestorePatch);
+
+    return res.json({ success: true, uid, message: "User updated" });
+  } catch (error) {
+    console.error("update-user error:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Update staff permissions ──
+app.post("/update-user-permissions", async (req, res) => {
+  try {
+    const { uid, permissions } = req.body;
+    if (!uid || !Array.isArray(permissions)) {
+      return res.status(400).json({ success: false, error: "uid and permissions array required" });
+    }
+    const ALLOWED = [
+      "staffDashboard", "product", "productList", "category",
+      "orders", "newOrders", "payments", "customers", "orderReport",
+    ];
+    const cleaned = permissions.filter((p) => ALLOWED.includes(p));
+    if (cleaned.length === 0) {
+      return res.status(400).json({ success: false, error: "At least one valid permission required" });
+    }
+    const userRef = db.collection("users").doc(uid);
+    const doc = await userRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+    if (doc.data().role !== "STAFF") {
+      return res.status(400).json({ success: false, error: "Permissions only apply to STAFF users" });
+    }
+    await userRef.update({
+      permissions: cleaned,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return res.json({ success: true, permissions: cleaned });
+  } catch (error) {
+    console.error("update-user-permissions error:", error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -527,6 +704,96 @@ app.post("/delete-shop", async (req, res) => {
     return res
       .status(500)
       .json({ success: false, error: error.message });
+  }
+});
+
+// ── Restore shop + sync shopName on products/users (deleted shop fix) ──
+app.post("/repair-shop-data", async (req, res) => {
+  try {
+    const SHOP_ID = req.body?.shopId || "xKUNJfO0kSZK4yCEhh8s";
+    const SHOP_NAME = req.body?.shopName || "RAFY ANSARI SHOP";
+
+    const shopIdFromPath = (ref) => {
+      const parts = ref.path.split("/");
+      const i = parts.indexOf("shops");
+      return i >= 0 ? parts[i + 1] : null;
+    };
+
+    await db.collection("shops").doc(SHOP_ID).set(
+      {
+        name: SHOP_NAME,
+        status: "active",
+        isDefault: false,
+        restoredAt: admin.firestore.FieldValue.serverTimestamp(),
+        restoredBy: "repair-shop-data-api",
+      },
+      { merge: true }
+    );
+
+    const catToShop = {};
+    const catSnap = await db.collectionGroup("categories").get();
+    catSnap.forEach((d) => {
+      catToShop[d.id] = shopIdFromPath(d.ref) || d.data().shopId;
+    });
+
+    const productsSnap = await db.collection("products").get();
+    const productUpdates = [];
+    const seen = new Set();
+
+    productsSnap.forEach((docSnap) => {
+      const p = docSnap.data();
+      const fromCat = catToShop[p.category] || catToShop[p.subcategory];
+      const belongsToShop =
+        p.shopId === SHOP_ID || fromCat === SHOP_ID;
+
+      if (!belongsToShop) return;
+      if (p.shopId === SHOP_ID && p.shopName === SHOP_NAME) return;
+      if (seen.has(docSnap.id)) return;
+      seen.add(docSnap.id);
+      productUpdates.push({
+        ref: docSnap.ref,
+        data: {
+          shopId: SHOP_ID,
+          shopName: SHOP_NAME,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+    });
+
+    const BATCH = 400;
+    for (let i = 0; i < productUpdates.length; i += BATCH) {
+      const batch = db.batch();
+      productUpdates.slice(i, i + BATCH).forEach(({ ref, data }) => batch.update(ref, data));
+      await batch.commit();
+    }
+
+    const usersSnap = await db
+      .collection("users")
+      .where("assignedShopId", "==", SHOP_ID)
+      .get();
+    let usersUpdated = 0;
+    for (const userDoc of usersSnap.docs) {
+      if (userDoc.data().assignedShopName !== SHOP_NAME) {
+        await userDoc.ref.update({
+          assignedShopName: SHOP_NAME,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        usersUpdated++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      shopId: SHOP_ID,
+      shopName: SHOP_NAME,
+      productsUpdated: productUpdates.length,
+      usersUpdated,
+      categoriesIndexed: Object.keys(catToShop).length,
+      message: `Shop "${SHOP_NAME}" restored and linked.`,
+    });
+  } catch (error) {
+    console.error("repair-shop-data error:", error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 

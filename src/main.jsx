@@ -1,14 +1,14 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import App from './App.jsx';
-import './index.css'; // ✅ Tailwind CSS
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { Toaster } from "sonner";
+import App from "./App.jsx";
+import "./index.css";
 
-// ✅ Opt into React Router v7 future flags (removes console warnings)
 const router = createBrowserRouter(
   [
-    { path: '/', element: <App /> },
-    { path: '/*', element: <App /> },
+    { path: "/", element: <App /> },
+    { path: "/*", element: <App /> },
   ],
   {
     future: {
@@ -18,8 +18,20 @@ const router = createBrowserRouter(
   }
 );
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <RouterProvider router={router} />
+    <Toaster
+      position="top-right"
+      richColors
+      closeButton
+      toastOptions={{
+        style: {
+          background: "#1a1a1f",
+          border: "1px solid rgba(251, 191, 36, 0.3)",
+          color: "#fafafa",
+        },
+      }}
+    />
   </React.StrictMode>
 );

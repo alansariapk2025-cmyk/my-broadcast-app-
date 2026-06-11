@@ -1,61 +1,114 @@
 ﻿rules_version = "2";
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function isAuth() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
+    function isAdmin() {
+      return isAuth() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isSuperAdminUser() {
+      return isAuth()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "SUPER_ADMIN";
+    }
+
+    function isPanelUser() {
+      return isAdmin() || isSuperAdminUser()
+        || (isAuth() && exists(/databases/$(database)/documents/users/$(request.auth.uid)));
+    }
+
+    function userShopId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedShopId;
+    }
+
+    function shopMatches(shopId) {
+      return isAdmin() || isSuperAdminUser() || userShopId() == shopId;
     }
 
     match /admins/{adminId} {
-      allow read: if isAuth();
+      allow read: if isAuth() && request.auth.uid == adminId;
       allow write: if false;
     }
 
     match /users/{userId} {
       allow read: if isAuth();
       allow create: if false;
-      allow update: if isAuth();
-      allow delete: if isAuth();
+      allow update: if isAuth() && (request.auth.uid == userId || isAdmin() || isSuperAdminUser());
+      allow delete: if isAdmin() || isSuperAdminUser();
     }
 
     match /shops/{shopId} {
-      allow read: if true;
-      allow write: if isAuth();
+      allow read: if isPanelUser() || shopMatches(shopId);
+      allow create, update, delete: if isAdmin() || isSuperAdminUser();
+
+      match /categories/{categoryId} {
+        allow read: if true;
+        allow write: if isPanelUser() && shopMatches(shopId);
+      }
+
+      match /notifications/{notifId} {
+        allow read, write: if isPanelUser() && shopMatches(shopId);
+      }
+
+      match /{sub=**} {
+        allow read: if isPanelUser() && shopMatches(shopId);
+        allow write: if isPanelUser() && shopMatches(shopId);
+      }
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAuth();
+      allow create, update, delete: if isPanelUser()
+        && (isAdmin() || isSuperAdminUser()
+            || resource == null
+            || resource.data.shopId == userShopId()
+            || request.resource.data.shopId == userShopId());
+    }
+
+    match /orders/{orderId} {
+      allow read: if isPanelUser()
+        || (resource.data.keys().hasAny(['shopId']) == false);
+      allow create: if true;
+      allow update, delete: if isPanelUser()
+        && (isAdmin() || isSuperAdminUser()
+            || resource.data.shopId == userShopId());
+    }
+
+    match /customers/{customerId} {
+      allow read: if isPanelUser();
+      allow write: if isPanelUser();
+    }
+
+    match /activityLogs/{logId} {
+      allow read: if isPanelUser();
+      allow create: if isAuth();
+      allow update, delete: if false;
+    }
+
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin() || isSuperAdminUser();
+    }
+
+    match /push_tokens/{tokenId} {
+      allow read, write: if isAuth();
+    }
+
+    match /notification_history/{historyId} {
+      allow read, write: if isAdmin() || isSuperAdminUser();
+    }
+
+    match /payments/{paymentId} {
+      allow read, write: if isPanelUser();
     }
 
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isAuth();
-    }
-
-    match /orders/{orderId} {
-      allow read: if true;
-      allow write: if true;
-    }
-
-    match /customers/{customerId} {
-      allow read: if true;
-      allow write: if true;
-    }
-
-    match /activityLogs/{logId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    match /{document=**} {
-      allow read: if true;
-      allow write: if isAuth();
+      allow write: if isPanelUser();
     }
   }
 }

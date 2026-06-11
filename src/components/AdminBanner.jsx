@@ -2,15 +2,17 @@ import { useState, useEffect } from "react";
 import { db } from "../firebase";
 import { collection, addDoc, getDocs, doc, deleteDoc, updateDoc } from "firebase/firestore";
 import toast, { Toaster } from "react-hot-toast";
+import { Image } from "lucide-react";
+import PageShell, { SectionCard, FormField } from "./ui/PageShell";
 
 export default function AdminBanner() {
   const [banner, setBanner] = useState({
     type: "slider",
     title: "",
     subtitle: "",
-    images: [], // for slider multiple images
-    imageFile: null, // temp selected image
-    imagePreview: null, // temp preview
+    images: [],
+    imageFile: null,
+    imagePreview: null,
     status: "active",
     order: 0,
     id: null,
@@ -19,10 +21,9 @@ export default function AdminBanner() {
   const [banners, setBanners] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
 
-  const MAX_SIZE = 1 * 1024 * 1024; // 1MB
+  const MAX_SIZE = 1 * 1024 * 1024;
   const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-  // Fetch banners
   const fetchBanners = async () => {
     try {
       const snap = await getDocs(collection(db, "banners"));
@@ -39,9 +40,9 @@ export default function AdminBanner() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setBanner(prev => ({
+    setBanner((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
@@ -52,25 +53,31 @@ export default function AdminBanner() {
     if (file.size > MAX_SIZE) return toast.error("Max 1MB allowed");
     if (!ALLOWED_TYPES.includes(file.type)) return toast.error("Only JPG, PNG, WEBP allowed");
 
-    try { createImageBitmap(file); } catch { return toast.error("Invalid image"); }
+    try {
+      createImageBitmap(file);
+    } catch {
+      return toast.error("Invalid image");
+    }
 
-    setBanner(prev => ({
+    setBanner((prev) => ({
       ...prev,
       imageFile: file,
-      imagePreview: URL.createObjectURL(file)
+      imagePreview: URL.createObjectURL(file),
     }));
     toast.success("Image ready!");
   };
 
-  // Upload image to ImgBB
   const uploadImage = async () => {
-    if (!banner.imageFile) return banner.imagePreview || null; // keep old
+    if (!banner.imageFile) return banner.imagePreview || null;
     setIsUploading(true);
     toast.loading("Uploading image...");
     try {
       const form = new FormData();
       form.append("image", banner.imageFile);
-      const res = await fetch(`https://api.imgbb.com/1/upload?key=${import.meta.env.VITE_IMGBB_API_KEY}`, { method: "POST", body: form });
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${import.meta.env.VITE_IMGBB_API_KEY}`, {
+        method: "POST",
+        body: form,
+      });
       const data = await res.json();
       toast.dismiss();
       setIsUploading(false);
@@ -93,7 +100,6 @@ export default function AdminBanner() {
 
     try {
       if (banner.id) {
-        // Update
         const updateData = {
           type: banner.type,
           status: banner.status,
@@ -109,7 +115,7 @@ export default function AdminBanner() {
 
         await updateDoc(doc(db, "banners", banner.id), {
           ...updateData,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         });
         toast.success("Banner updated!");
       } else {
@@ -128,12 +134,22 @@ export default function AdminBanner() {
 
         await addDoc(collection(db, "banners"), {
           ...newData,
-          createdAt: new Date()
+          createdAt: new Date(),
         });
         toast.success("Banner added!");
       }
 
-      setBanner({ type: "slider", title: "", subtitle: "", images: [], imageFile: null, imagePreview: null, status: "active", order: 0, id: null });
+      setBanner({
+        type: "slider",
+        title: "",
+        subtitle: "",
+        images: [],
+        imageFile: null,
+        imagePreview: null,
+        status: "active",
+        order: 0,
+        id: null,
+      });
       fetchBanners();
     } catch {
       toast.error("Failed to save banner!");
@@ -147,11 +163,11 @@ export default function AdminBanner() {
       subtitle: b.subtitle || "",
       images: b.images || [],
       imageFile: null,
-      imagePreview: b.imageUrl || (b.images?.[0] || null),
+      imagePreview: b.imageUrl || b.images?.[0] || null,
       status: b.status,
       order: b.order,
       id: b.id,
-      imageUrl: b.imageUrl
+      imageUrl: b.imageUrl,
     });
   };
 
@@ -168,55 +184,98 @@ export default function AdminBanner() {
   };
 
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
+    <PageShell title="Admin Banners" subtitle="Manage homepage sliders and offer banners" icon={Image}>
       <Toaster position="top-right" />
-      <h2 className="text-2xl font-bold mb-4">🖼 Admin Banners</h2>
 
-      <form onSubmit={handleSubmit} className="p-4 bg-white rounded-lg shadow space-y-4 mb-6">
-        <select name="type" value={banner.type} onChange={handleChange} className="p-2 border rounded w-full">
-          <option value="slider">Slider</option>
-          <option value="offer">Offer</option>
-        </select>
+      <SectionCard title={banner.id ? "Update Banner" : "Add Banner"} icon={Image}>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormField label="Banner Type">
+            <select name="type" value={banner.type} onChange={handleChange} className="theme-input w-full">
+              <option value="slider">Slider</option>
+              <option value="offer">Offer</option>
+            </select>
+          </FormField>
 
-        {banner.type === "offer" && (
-          <>
-            <input name="title" value={banner.title} onChange={handleChange} placeholder="Title (e.g. December Mega Sale)" className="p-2 border rounded w-full"/>
-            <input name="subtitle" value={banner.subtitle} onChange={handleChange} placeholder="Subtitle (e.g. Up to 50% Off)" className="p-2 border rounded w-full"/>
-          </>
-        )}
+          {banner.type === "offer" && (
+            <>
+              <FormField label="Title">
+                <input
+                  name="title"
+                  value={banner.title}
+                  onChange={handleChange}
+                  placeholder="e.g. December Mega Sale"
+                  className="theme-input w-full"
+                />
+              </FormField>
+              <FormField label="Subtitle">
+                <input
+                  name="subtitle"
+                  value={banner.subtitle}
+                  onChange={handleChange}
+                  placeholder="e.g. Up to 50% Off"
+                  className="theme-input w-full"
+                />
+              </FormField>
+            </>
+          )}
 
-        <input type="number" name="order" value={banner.order} onChange={handleChange} placeholder="Order" className="p-2 border rounded w-full"/>
-        <input type="file" accept="image/*" onChange={handleImageSelect} className="p-2 border rounded w-full"/>
-        {banner.imagePreview && <img src={banner.imagePreview} className="w-32 h-32 object-cover rounded border mt-2"/>}
+          <FormField label="Display Order">
+            <input
+              type="number"
+              name="order"
+              value={banner.order}
+              onChange={handleChange}
+              placeholder="Order"
+              className="theme-input w-full"
+            />
+          </FormField>
+          <FormField label="Image">
+            <input type="file" accept="image/*" onChange={handleImageSelect} className="theme-input w-full" />
+          </FormField>
+          {banner.imagePreview && (
+            <img src={banner.imagePreview} alt="" className="w-32 h-32 object-cover rounded-xl border theme-card-inner" />
+          )}
 
-        <select name="status" value={banner.status} onChange={handleChange} className="p-2 border rounded w-full">
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
+          <FormField label="Status">
+            <select name="status" value={banner.status} onChange={handleChange} className="theme-input w-full">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </FormField>
 
-        <button type="submit" disabled={isUploading} className="bg-blue-500 text-white px-4 py-2 rounded">
-          {banner.id ? "Update Banner" : isUploading ? "Uploading..." : "Add Banner"}
-        </button>
-      </form>
+          <button type="submit" disabled={isUploading} className="theme-btn-primary">
+            {banner.id ? "Update Banner" : isUploading ? "Uploading..." : "Add Banner"}
+          </button>
+        </form>
+      </SectionCard>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {banners.map(b => (
-          <div key={b.id} className="bg-white p-2 rounded shadow flex flex-col items-center">
+        {banners.map((b) => (
+          <div key={b.id} className="theme-card theme-glass p-4 flex flex-col items-center">
             {b.type === "offer" ? (
               <>
-                <img src={b.imageUrl} className="w-full h-32 object-cover rounded"/>
-                <div className="text-center mt-2"><h3>{b.title}</h3><p>{b.subtitle}</p></div>
+                <img src={b.imageUrl} alt="" className="w-full h-32 object-cover rounded-xl" />
+                <div className="text-center mt-2">
+                  <h3 className="font-semibold theme-page-title">{b.title}</h3>
+                  <p className="text-sm theme-page-muted">{b.subtitle}</p>
+                </div>
               </>
             ) : (
-              b.images?.map((img, idx) => <img key={idx} src={img} className="w-full h-32 object-cover rounded mb-2"/>) 
+              b.images?.map((img, idx) => (
+                <img key={idx} src={img} alt="" className="w-full h-32 object-cover rounded-xl mb-2" />
+              ))
             )}
-            <div className="flex gap-2 mt-2">
-              <button onClick={() => handleEdit(b)} className="bg-yellow-500 text-white px-2 py-1 rounded">Edit</button>
-              <button onClick={() => handleDelete(b.id)} className="bg-red-500 text-white px-2 py-1 rounded">Delete</button>
+            <div className="flex gap-2 mt-3">
+              <button type="button" onClick={() => handleEdit(b)} className="theme-btn-secondary text-xs">
+                Edit
+              </button>
+              <button type="button" onClick={() => handleDelete(b.id)} className="theme-btn-danger text-xs">
+                Delete
+              </button>
             </div>
           </div>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

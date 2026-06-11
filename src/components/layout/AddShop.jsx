@@ -1,176 +1,311 @@
-import { useState, useEffect } from "react";
-import { db } from "../../firebase"; // apke firebase config ka path
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { db } from "../../firebase";
 import {
   collection,
   addDoc,
   deleteDoc,
   updateDoc,
   doc,
-  onSnapshot,
-  query,
-  where,
+  getDocs,
 } from "firebase/firestore";
+import { Store, Plus, Trash2, Edit2, Power, PowerOff, RefreshCw, Search, MapPin, Phone } from "lucide-react";
+import { PRIMARY_SHOP_ID, PRIMARY_SHOP_NAME, KNOWN_SHOP_NAMES, resolveShopDisplayName } from "../../constants/shops";
+import notify from "../../utils/notify";
+import { repairPrimaryShopFull } from "../../utils/repairPrimaryShop";
+import { useShop } from "../../contexts/ShopContext";
+import PageShell, { SectionCard, FormField } from "../ui/PageShell";
 
 export default function AddShop() {
+  const { refreshShops } = useShop();
   const [shopName, setShopName] = useState("");
+  const [shopAddress, setShopAddress] = useState("");
+  const [shopPhone, setShopPhone] = useState("");
   const [shops, setShops] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const shopsCollection = collection(db, "shops");
 
-  // 🔹 Realtime listener for shops
-  useEffect(() => {
-    const unsubscribe = onSnapshot(
-      shopsCollection,
-      (snapshot) => {
-        setShops(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-      },
-      (err) => {
-        console.warn("Shops listener error:", err);
+  const loadShops = useCallback(async () => {
+    setLoading(true);
+    try {
+      const snap = await getDocs(shopsCollection);
+      let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (!list.some((s) => s.id === PRIMARY_SHOP_ID)) {
+        list = [{ id: PRIMARY_SHOP_ID, name: PRIMARY_SHOP_NAME, status: "active", _needsRestore: true }, ...list];
       }
-    );
-    return () => unsubscribe();
+      setShops(list);
+    } catch {
+      notify.error("Failed to load shops");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // 🔹 Add Shop
+  useEffect(() => {
+    loadShops();
+  }, [loadShops]);
+
+  const stats = useMemo(() => ({
+    total: shops.length,
+    active: shops.filter((s) => s.status !== "disabled").length,
+    disabled: shops.filter((s) => s.status === "disabled").length,
+  }), [shops]);
+
+  const filteredShops = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return shops.filter((s) => {
+      const matchSearch = !q
+        || (s.name || "").toLowerCase().includes(q)
+        || (s.phone || "").includes(q)
+        || (s.address || "").toLowerCase().includes(q);
+      const matchStatus = statusFilter === "all"
+        || (statusFilter === "active" && s.status !== "disabled")
+        || (statusFilter === "disabled" && s.status === "disabled");
+      return matchSearch && matchStatus;
+    });
+  }, [shops, search, statusFilter]);
+
+  const resetForm = () => {
+    setEditingId(null);
+    setShopName("");
+    setShopAddress("");
+    setShopPhone("");
+  };
+
   const handleAddShop = async (e) => {
     e.preventDefault();
     if (!shopName.trim()) {
-      alert("❗ Shop name is required");
+      notify.warning("Shop name is required");
       return;
     }
 
-    // Duplicate check
     const exists = shops.find(
-      (shop) => shop.name.toLowerCase() === shopName.trim().toLowerCase()
+      (shop) => shop.name.toLowerCase() === shopName.trim().toLowerCase() && shop.id !== editingId
     );
     if (exists) {
-      alert("⚠️ This shop already exists!");
+      notify.warning("This shop already exists");
       return;
     }
 
     try {
-      await addDoc(shopsCollection, {
-        name: shopName.trim(),
-        createdAt: Date.now(),
-      });
-      setShopName("");
+      if (editingId) {
+        await updateDoc(doc(db, "shops", editingId), {
+          name: shopName.trim(),
+          address: shopAddress.trim(),
+          phone: shopPhone.trim(),
+          updatedAt: Date.now(),
+        });
+        notify.success("Shop updated");
+      } else {
+        await addDoc(shopsCollection, {
+          name: shopName.trim(),
+          address: shopAddress.trim(),
+          phone: shopPhone.trim(),
+          status: "active",
+          createdAt: Date.now(),
+        });
+        notify.success("Shop created successfully");
+      }
+      resetForm();
+      loadShops();
     } catch (error) {
-      console.error("❌ Error adding shop:", error);
-      alert("Something went wrong!");
+      console.error("Error saving shop:", error);
+      notify.error("Failed to save shop");
     }
   };
 
-  // 🔹 Delete Shop
   const handleDelete = async (id) => {
+    if (!window.confirm("Delete this shop? This cannot be undone.")) return;
     try {
       await deleteDoc(doc(db, "shops", id));
-    } catch (error) {
-      console.error("❌ Error deleting shop:", error);
+      notify.success("Shop deleted");
+      if (editingId === id) resetForm();
+      loadShops();
+    } catch {
+      notify.error("Failed to delete shop");
     }
   };
 
-  // 🔹 Update Shop
-  const handleUpdate = async (id) => {
-    if (!shopName.trim()) {
-      alert("❗ Enter new shop name to update");
-      return;
-    }
-
-    // Duplicate check
-    const exists = shops.find(
-      (shop) =>
-        shop.name.toLowerCase() === shopName.trim().toLowerCase() &&
-        shop.id !== id
-    );
-    if (exists) {
-      alert("⚠️ Shop name already exists!");
-      return;
-    }
-
+  const toggleShopStatus = async (shop) => {
+    const newStatus = shop.status === "disabled" ? "active" : "disabled";
     try {
-      await updateDoc(doc(db, "shops", id), {
-        name: shopName.trim(),
-      });
-      setShopName("");
-      setEditingId(null);
-    } catch (error) {
-      console.error("❌ Error updating shop:", error);
+      await updateDoc(doc(db, "shops", shop.id), { status: newStatus });
+      notify.success(`Shop ${newStatus === "active" ? "enabled" : "disabled"}`);
+      loadShops();
+    } catch {
+      notify.error("Failed to update shop status");
     }
   };
+
+  const startEdit = (shop) => {
+    setEditingId(shop.id);
+    setShopName(shop.name);
+    setShopAddress(shop.address || "");
+    setShopPhone(shop.phone || "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const [repairing, setRepairing] = useState(false);
+
+  const repairPrimaryShop = async () => {
+    if (!window.confirm(`Firebase mein "${PRIMARY_SHOP_NAME}" restore karein?\n\nShop + Products + Categories + Staff names update honge.`)) return;
+    setRepairing(true);
+    try {
+      const result = await repairPrimaryShopFull();
+      notify.success(
+        `${result.shopName}: ${result.productsUpdated} products, ${result.categoriesUpdated} categories, ${result.usersUpdated} staff updated`
+      );
+      await refreshShops?.();
+      loadShops();
+    } catch (err) {
+      console.error(err);
+      notify.error(err.message || "Sync failed — Super Admin login check karein");
+    } finally {
+      setRepairing(false);
+    }
+  };
+
+  const displayShopName = (shop) => resolveShopDisplayName(shop.id, {}, shop.name);
 
   return (
-    <div className="space-y-6">
-      {/* Form */}
-      <form
-        onSubmit={editingId ? (e) => { e.preventDefault(); handleUpdate(editingId);} : handleAddShop}
-        className="bg-white/30 backdrop-blur-md p-6 rounded shadow space-y-4"
-      >
-        <h2 className="text-xl font-bold text-gray-800">
-          🏬 {editingId ? "Update Shop" : "Add Shop"}
-        </h2>
-        <input
-          type="text"
-          value={shopName}
-          onChange={(e) => setShopName(e.target.value)}
-          placeholder="Enter Shop Name"
-          className="w-full p-2 border border-gray-300 rounded"
-        />
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 shadow-md transition"
-        >
-          {editingId ? "Update Shop" : "Add Shop"}
-        </button>
-        {editingId && (
-          <button
-            type="button"
-            onClick={() => {
-              setEditingId(null);
-              setShopName("");
-            }}
-            className="ml-3 bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition"
-          >
-            Cancel
+    <PageShell
+      title="Shop Management"
+      subtitle="Add, edit and manage shops for multi-tenant POS"
+      icon={Store}
+      actions={
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={repairPrimaryShop} disabled={repairing} className="theme-btn-primary text-sm">
+            {repairing ? "Syncing..." : `Sync ${PRIMARY_SHOP_NAME} (Firebase)`}
           </button>
-        )}
-      </form>
-
-      {/* Shop List */}
-      <div className="bg-white/30 backdrop-blur-md p-6 rounded shadow">
-        <h3 className="text-lg font-semibold mb-4">📋 Shop List</h3>
-        {shops.length === 0 ? (
-          <p className="text-gray-600">No shops added yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {shops.map((shop) => (
-              <li
-                key={shop.id}
-                className="flex justify-between items-center bg-white p-3 rounded shadow"
-              >
-                <span className="font-medium">{shop.name}</span>
-                <div className="space-x-2">
-                  <button
-                    onClick={() => {
-                      setEditingId(shop.id);
-                      setShopName(shop.name);
-                    }}
-                    className="bg-yellow-500 text-white px-4 py-1 rounded hover:bg-yellow-600"
-                  >
-                    Update
-                  </button>
-                  <button
-                    onClick={() => handleDelete(shop.id)}
-                    className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+          <button type="button" onClick={loadShops} className="theme-btn-secondary text-sm">
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="stat-card p-4">
+          <p className="text-xs theme-page-muted">Total Shops</p>
+          <p className="text-2xl font-bold theme-highlight">{stats.total}</p>
+        </div>
+        <div className="stat-card p-4">
+          <p className="text-xs theme-page-muted">Active</p>
+          <p className="text-2xl font-bold theme-highlight">{stats.active}</p>
+        </div>
+        <div className="stat-card p-4">
+          <p className="text-xs theme-page-muted">Disabled</p>
+          <p className="text-2xl font-bold theme-highlight">{stats.disabled}</p>
+        </div>
       </div>
-    </div>
+
+      <SectionCard title={editingId ? "Edit Shop" : "Add Shop"} icon={Plus}>
+        <form onSubmit={handleAddShop} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <FormField label="Shop Name" required>
+              <input type="text" placeholder="Shop name" value={shopName} onChange={(e) => setShopName(e.target.value)} className="theme-input" />
+            </FormField>
+            <FormField label="Address">
+              <input type="text" placeholder="Address" value={shopAddress} onChange={(e) => setShopAddress(e.target.value)} className="theme-input" />
+            </FormField>
+            <FormField label="Phone">
+              <input type="text" placeholder="Phone" value={shopPhone} onChange={(e) => setShopPhone(e.target.value)} className="theme-input" />
+            </FormField>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="theme-btn-primary">
+              <Plus className="w-4 h-4" />
+              {editingId ? "Update Shop" : "Add Shop"}
+            </button>
+            {editingId && (
+              <button type="button" onClick={resetForm} className="theme-btn-secondary">Cancel Edit</button>
+            )}
+          </div>
+        </form>
+      </SectionCard>
+
+      <SectionCard title="All Shops" icon={Store}>
+        <div className="flex flex-wrap gap-3 mb-4">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-page-muted" />
+            <input
+              type="text"
+              placeholder="Search name, phone, address..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="theme-input pl-10"
+            />
+          </div>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="theme-select min-w-[140px]">
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </div>
+
+        <div className="overflow-x-auto -mx-5 px-5">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left">
+                <th className="p-4">Shop</th>
+                <th className="p-4 hidden md:table-cell">Contact</th>
+                <th className="p-4">Status</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredShops.map((shop) => (
+                <tr key={shop.id} className={`border-t theme-card-inner ${editingId === shop.id ? "ring-1 ring-blue-500/40" : ""}`}>
+                  <td className="p-4">
+                    <p className="font-medium theme-page-title">{displayShopName(shop)}</p>
+                    <p className="text-[10px] theme-page-muted font-mono">{shop.id}</p>
+                    <p className="text-xs theme-page-muted flex items-center gap-1 mt-1 md:hidden">
+                      <Phone className="w-3 h-3" /> {shop.phone || "—"}
+                    </p>
+                    {shop.address && (
+                      <p className="text-xs theme-page-muted flex items-center gap-1 mt-1">
+                        <MapPin className="w-3 h-3 shrink-0" /> {shop.address}
+                      </p>
+                    )}
+                    {shop._needsRestore && (
+                      <span className="theme-badge theme-badge-warning text-[10px] mt-1">Firebase mein restore karein — Sync button</span>
+                    )}
+                  </td>
+                  <td className="p-4 hidden md:table-cell theme-page-muted">{shop.phone || "—"}</td>
+                  <td className="p-4">
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${shop.status === "disabled" ? "theme-badge theme-badge-danger" : "theme-badge theme-badge-info"}`}>
+                      {shop.status === "disabled" ? "Disabled" : "Active"}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-end gap-2">
+                      <button type="button" onClick={() => toggleShopStatus(shop)} className="theme-btn-secondary p-2" title={shop.status === "disabled" ? "Enable" : "Disable"}>
+                        {shop.status === "disabled" ? <Power size={16} /> : <PowerOff size={16} />}
+                      </button>
+                      <button type="button" onClick={() => startEdit(shop)} className="theme-btn-secondary p-2" title="Edit">
+                        <Edit2 size={16} />
+                      </button>
+                      <button type="button" onClick={() => handleDelete(shop.id)} className="theme-btn-danger p-2" title="Delete">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredShops.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center theme-page-muted">
+                    {shops.length === 0 ? "No shops yet. Add your first shop above." : "No shops match your search."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+    </PageShell>
   );
 }

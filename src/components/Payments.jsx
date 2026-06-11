@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { db } from "../firebase";
 import {
   collection,
-  onSnapshot,
+  getDocs,
   deleteDoc,
   doc,
   query,
@@ -21,6 +21,11 @@ import {
   FaUndo,
 } from "react-icons/fa";
 import JsBarcode from "jsbarcode";
+import { useShop } from "../contexts/ShopContext";
+import { filterByShop } from "../utils/shopUtils";
+import notify from "../utils/notify";
+import PageShell from "./ui/PageShell";
+import { Wallet } from "lucide-react";
 
 const num = (v) => (typeof v === "number" && !isNaN(v) ? v : Number(v) || 0);
 
@@ -78,7 +83,10 @@ const saveSettings = (settings) => {
   }
 };
 
-export default function Payments() {
+export default function Payments({ assignedShopId: propShopId }) {
+  const { effectiveShopId: ctxShopId } = useShop();
+  const effectiveShopId = propShopId || ctxShopId;
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("All");
@@ -89,30 +97,27 @@ export default function Payments() {
   const [printSettings, setPrintSettings] = useState(loadSettings());
   const perPage = 15;
 
-  // ── Fetch Orders ──
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(200));
+      const snapshot = await getDocs(q);
+      let allOrders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (effectiveShopId) allOrders = filterByShop(allOrders, effectiveShopId);
+      setOrders(allOrders);
+    } catch (err) {
+      console.error("Orders fetch error:", err);
+      notify.error("Failed to load payments");
+    } finally {
+      setLoading(false);
+    }
+  }, [effectiveShopId]);
+
   useEffect(() => {
-    const q = query(
-      collection(db, "orders"),
-      orderBy("createdAt", "desc"),
-      limit(200)
-    );
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const allOrders = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
-        setOrders(allOrders);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Orders fetch error:", err);
-        setLoading(false);
-      }
-    );
-    return () => unsubscribe();
-  }, []);
+    fetchOrders();
+    const timer = setInterval(fetchOrders, 90_000);
+    return () => clearInterval(timer);
+  }, [fetchOrders]);
 
   // ── Filter Orders ──
   const filtered = useMemo(() => {
@@ -491,29 +496,24 @@ export default function Payments() {
   );
 
   return (
-    <div className="p-6 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl shadow-2xl w-full max-w-7xl mx-auto overflow-auto border border-blue-200">
-
-      {/* ── Page Title with Settings Button ── */}
-      <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
-        <div>
-          <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-indigo-700 tracking-tight">
-            Orders & Payments
-          </h2>
-          <p className="text-gray-500 text-sm mt-1">
-            Manage all customer orders and invoices
-          </p>
-        </div>
+    <PageShell
+      title="Orders & Payments"
+      subtitle="Manage all customer orders and invoices"
+      icon={Wallet}
+      actions={
         <button
+          type="button"
           onClick={() => setShowSettings(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl shadow-lg font-semibold text-sm transition-all"
+          className="theme-btn-primary text-sm"
         >
           <FaCog className="animate-spin-slow" />
           Print Settings
         </button>
-      </div>
+      }
+    >
 
       {/* ── Stats Bar ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Total Orders", value: orders.length, color: "from-blue-500 to-blue-600" },
           { label: "Pending", value: orders.filter((o) => (o.status || "Pending") === "Pending").length, color: "from-yellow-400 to-yellow-500" },
@@ -528,7 +528,7 @@ export default function Payments() {
       </div>
 
       {/* ── Search + Filter ── */}
-      <div className="flex flex-wrap gap-3 items-center justify-between mb-5">
+      <div className="theme-card theme-glass p-4 flex flex-wrap gap-3 items-center justify-between">
         <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm flex-1 min-w-[240px]">
           <FaSearch className="text-gray-400 shrink-0" />
           <input
@@ -1025,7 +1025,7 @@ export default function Payments() {
           animation: spin 3s linear infinite;
         }
       `}</style>
-    </div>
+    </PageShell>
   );
 }
 

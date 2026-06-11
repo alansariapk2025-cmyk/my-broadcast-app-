@@ -1,47 +1,33 @@
-// src/App.jsx
-// ✅ Updated: Uses AuthContext for RBAC + backward compatible with legacy admins/ check
-// Adds: STAFF dashboard, ShopUserManager, ActivityLogs, shop-scoped routing
-
-import { useState } from "react";
-import { signOut }   from "firebase/auth";
-import { auth }      from "./firebase";
-
-// ── Auth Context ─────────────────────────────────────────────────────────────
+import { useState, useEffect } from "react";
+import { signOut } from "firebase/auth";
+import { Loader2, ShieldAlert, Ban } from "lucide-react";
+import { auth } from "./firebase";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-
-// ── Layout ───────────────────────────────────────────────────────────────────
-import Sidebar  from "./components/layout/Sidebar";
-import Header   from "./components/layout/Header";
-
-// ── Super Admin Screens ──────────────────────────────────────────────────────
-import Dashboard             from "./components/dashboard/Dashboard";
-import AddProduct            from "./components/AddProduct";
-import ProductList           from "./components/ProductList";
-import PriceManagement       from "./components/PriceManagement";
-import FlashDealsManager     from "./components/FlashDealsManager";
-import AddCategory           from "./components/AddCategory";
-import AddShop               from "./components/layout/AddShop";
-import Orders                from "./components/Orders";
-import NewOrders             from "./components/NewOrders";
-import Payments              from "./components/Payments";
-import Customers             from "./components/Customers";
-import Backup                from "./pages/Backup";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { ShopProvider, useShop } from "./contexts/ShopContext";
+import Sidebar from "./components/layout/Sidebar";
+import Header from "./components/layout/Header";
+import Dashboard from "./components/dashboard/Dashboard";
+import AddProduct from "./components/AddProduct";
+import ProductList from "./components/ProductList";
+import PriceManagement from "./components/PriceManagement";
+import FlashDealsManager from "./components/FlashDealsManager";
+import AddCategory from "./components/AddCategory";
+import AddShop from "./components/layout/AddShop";
+import Orders from "./components/Orders";
+import NewOrders from "./components/NewOrders";
+import Payments from "./components/Payments";
+import Customers from "./components/Customers";
+import Backup from "./pages/Backup";
 import SendNotificationScreen from "./components/SendNotificationScreen";
-import OrderReportAdvanced   from "./components/OrderReportAdvanced";
-import AdminBanner           from "./components/AdminBanner";
-import AdminUsers            from "./components/AdminUsers";
-
-// ── New RBAC Screens ──────────────────────────────────────────────────────────
-import ShopUserManager       from "./components/ShopUserManager";
-import ActivityLogs          from "./components/ActivityLogs";
-import StaffDashboard        from "./components/StaffDashboard";
-
-// ── Auth Screen ───────────────────────────────────────────────────────────────
+import OrderReportAdvanced from "./components/OrderReportAdvanced";
+import AdminBanner from "./components/AdminBanner";
+import UserManagement from "./components/UserManagement";
+import StaffPermissions from "./components/StaffPermissions";
+import ActivityLogs from "./components/ActivityLogs";
+import StaffDashboard from "./components/StaffDashboard";
 import AuthScreen from "./components/AuthScreen";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Inner App (consumes AuthContext)
-// ─────────────────────────────────────────────────────────────────────────────
 function AppInner() {
   const {
     currentUser,
@@ -51,39 +37,46 @@ function AppInner() {
     assignedShopId,
     assignedShopName,
     userName,
+    roleLabel,
     authLoading,
     authError,
     hasPermission,
+    permissions,
   } = useAuth();
 
-  // Default tab depends on role
-  const defaultTab = isStaff ? "staffDashboard" : "dashboard";
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const { displayShopName } = useShop();
+  const homeTab = isStaff
+    ? permissions.includes("staffDashboard")
+      ? "staffDashboard"
+      : permissions[0] || "staffDashboard"
+    : "dashboard";
+  const [activeTab, setActiveTab] = useState(homeTab);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // ── Loading ──────────────────────────────────────────────────────
+  useEffect(() => {
+    setActiveTab(homeTab);
+  }, [homeTab]);
+
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen flex items-center justify-center theme-main">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-lg font-semibold text-gray-700">⏳ Checking login status...</p>
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="theme-page-muted font-medium">Verifying session...</p>
         </div>
       </div>
     );
   }
 
-  // ── Auth Error (suspended, unauthorized) ──────────────────────────
   if (authError && !currentUser) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 p-6">
-        <div className="max-w-md w-full rounded-2xl border border-red-200 bg-white p-8 text-center shadow-xl">
-          <span className="text-5xl">⚠️</span>
-          <h1 className="text-xl font-bold text-red-700 mt-4 mb-2">Account Issue</h1>
-          <p className="text-gray-600 mb-6">{authError}</p>
-          <button
-            onClick={() => signOut(auth)}
-            className="w-full rounded-xl bg-red-600 px-4 py-3 text-white font-semibold hover:bg-red-700 transition"
-          >
+      <div className="min-h-screen flex flex-col items-center justify-center theme-main p-6">
+        <div className="theme-card max-w-md w-full p-8 text-center">
+          <ShieldAlert className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-red-400 mb-2">Account Issue</h1>
+          <p className="theme-page-muted mb-6">{authError}</p>
+          <button onClick={() => signOut(auth)} className="theme-btn-danger w-full py-3">
             Sign Out
           </button>
         </div>
@@ -91,105 +84,123 @@ function AppInner() {
     );
   }
 
-  // ── Not Logged In → Show Login ─────────────────────────────────────
   if (!currentUser) return <AuthScreen />;
 
-  // ── No Role (edge case) ────────────────────────────────────────────
   if (!userRole) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 p-6">
-        <div className="max-w-lg w-full rounded-2xl border border-red-200 bg-white p-8 text-center shadow-xl">
-          <span className="text-4xl">🚫</span>
-          <h1 className="text-2xl font-bold text-red-600 mb-3 mt-4">Access Denied</h1>
-          <p className="text-gray-600 mb-2">This account is not registered as an admin or staff.</p>
-          <p className="text-sm text-gray-500 mb-6">Contact the super-admin to get access.</p>
-          <p className="text-xs bg-gray-50 rounded-lg p-3 mb-6 text-gray-500">
-            Email: {currentUser.email}
-          </p>
-          <button
-            onClick={() => signOut(auth)}
-            className="w-full rounded-xl bg-red-600 px-4 py-3 text-white font-semibold hover:bg-red-700 transition"
-          >
-            Sign Out &amp; Try Another Account
+      <div className="min-h-screen flex flex-col items-center justify-center theme-main p-6">
+        <div className="theme-card max-w-lg w-full p-8 text-center">
+          <Ban className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-red-400 mb-3">Access Denied</h1>
+          <p className="theme-page-muted mb-6">Contact the super admin to get access.</p>
+          <button onClick={() => signOut(auth)} className="theme-btn-danger w-full py-3">
+            Sign Out
           </button>
         </div>
       </div>
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Tab Navigation helper — safe tab switch with permission check
-  // ─────────────────────────────────────────────────────────────────
   const handleTabChange = (tabId) => {
-    if (hasPermission(tabId)) {
-      setActiveTab(tabId);
-    }
-    // If no permission, silently ignore (security via Firestore rules also enforced)
+    if (hasPermission(tabId)) setActiveTab(tabId);
   };
 
-  // ─────────────────────────────────────────────────────────────────
-  // Screen Renderer
-  // ─────────────────────────────────────────────────────────────────
+  const handleRefresh = () => setRefreshKey((k) => k + 1);
+  const key = refreshKey;
+  const staffMode = isStaff;
+
   const renderScreen = () => {
-    // ── STAFF screens ───────────────────────────────────────────────
-    if (isStaff) {
-      switch (activeTab) {
-        case "staffDashboard": return <StaffDashboard onNavigate={handleTabChange} />;
-        case "product":        return <AddProduct  assignedShopId={assignedShopId} isStaff={isStaff} />;
-        case "productList":    return <ProductList assignedShopId={assignedShopId} isStaff={isStaff} />;
-        case "category":       return <AddCategory assignedShopId={assignedShopId} isStaff={isStaff} />;
-        default:               return <StaffDashboard onNavigate={handleTabChange} />;
-      }
-    }
-
-    // ── SUPER_ADMIN screens (all original + new ones) ───────────────
     switch (activeTab) {
-      case "dashboard":       return <Dashboard />;
-      case "product":         return <AddProduct />;
-      case "productList":     return <ProductList />;
-      case "priceManagement": return <PriceManagement />;
-      case "flashDeals":      return <FlashDealsManager />;
-      case "category":        return <AddCategory />;
-      case "shop":            return <AddShop />;
-      case "orders":          return <Orders onNavigate={handleTabChange} />;
-      case "newOrders":       return <NewOrders onNavigate={handleTabChange} />;
-      case "payments":        return <Payments />;
-      case "customers":       return <Customers />;
-      case "backup":          return <Backup />;
-      case "notifications":   return <SendNotificationScreen />;
-      case "orderReport":     return <OrderReportAdvanced />;
-      case "banners":         return <AdminBanner />;
-      case "adminUsers":      return <AdminUsers isSuperAdmin={isSuperAdmin} currentUser={currentUser} />;
-      // ── NEW screens ───────────────────────────────────────────────
-      case "staffUsers":      return <ShopUserManager />;
-      case "activityLogs":    return <ActivityLogs />;
-      default:                return <Dashboard />;
+      case "dashboard":
+        return <Dashboard key={key} />;
+      case "staffDashboard":
+        return <StaffDashboard key={key} onNavigate={handleTabChange} />;
+      case "product":
+        return (
+          <AddProduct
+            key={key}
+            assignedShopId={assignedShopId}
+            isStaff={staffMode}
+          />
+        );
+      case "productList":
+        return (
+          <ProductList
+            key={key}
+            assignedShopId={assignedShopId}
+            isStaff={staffMode}
+          />
+        );
+      case "priceManagement":
+        return <PriceManagement key={key} />;
+      case "flashDeals":
+        return <FlashDealsManager key={key} />;
+      case "category":
+        return (
+          <AddCategory
+            key={key}
+            assignedShopId={assignedShopId}
+            isStaff={staffMode}
+          />
+        );
+      case "shop":
+        return <AddShop key={key} />;
+      case "orders":
+        return <Orders key={key} onNavigate={handleTabChange} assignedShopId={assignedShopId} />;
+      case "newOrders":
+        return <NewOrders key={key} onNavigate={handleTabChange} assignedShopId={assignedShopId} />;
+      case "payments":
+        return <Payments key={key} assignedShopId={assignedShopId} />;
+      case "customers":
+        return <Customers key={key} assignedShopId={assignedShopId} />;
+      case "backup":
+        return <Backup key={key} />;
+      case "notifications":
+        return <SendNotificationScreen key={key} />;
+      case "orderReport":
+        return <OrderReportAdvanced key={key} assignedShopId={assignedShopId} />;
+      case "banners":
+        return <AdminBanner key={key} />;
+      case "users":
+        return <UserManagement key={key} />;
+      case "permissions":
+        return <StaffPermissions key={key} />;
+      case "activityLogs":
+        return <ActivityLogs key={key} />;
+      default:
+        return staffMode ? (
+          <StaffDashboard key={key} onNavigate={handleTabChange} />
+        ) : (
+          <Dashboard key={key} />
+        );
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────
-  // Render Layout
-  // ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+    <div className="flex min-h-screen theme-main">
       <Sidebar
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        isAdmin={isSuperAdmin}
         isSuperAdmin={isSuperAdmin}
         userRole={userRole}
+        roleLabel={roleLabel}
         assignedShopName={assignedShopName}
+        displayShopName={displayShopName}
+        permissions={permissions}
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
       />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <Header
-          activeTab={activeTab}
-          setActiveTab={handleTabChange}
           user={currentUser}
           onLogout={() => signOut(auth)}
           isSuperAdmin={isSuperAdmin}
           userName={userName}
+          roleLabel={roleLabel}
+          onMenuToggle={() => setMobileOpen((o) => !o)}
+          onRefresh={handleRefresh}
         />
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto theme-main">
           {renderScreen()}
         </main>
       </div>
@@ -197,13 +208,14 @@ function AppInner() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Root App wraps everything in AuthProvider
-// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
-    <AuthProvider>
-      <AppInner />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <ShopProvider>
+          <AppInner />
+        </ShopProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

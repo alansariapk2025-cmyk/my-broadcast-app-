@@ -1,8 +1,5 @@
 ﻿/**
- * AuthContext.jsx
- * Firebase Authentication provider for legacy and RBAC users.
- * Detects role from admins/ or users/ collections, refreshes tokens,
- * and signs out suspended accounts automatically.
+ * AuthContext — Super Admin + Staff with custom permissions.
  */
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -10,34 +7,27 @@ import { onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { logActivity } from "../utils/activityLogger";
+import {
+  DEFAULT_STAFF_PERMISSIONS,
+  SUPER_ADMIN_PERMISSIONS,
+} from "../constants/permissions";
+
+export const ROLES = {
+  SUPER_ADMIN: "SUPER_ADMIN",
+  STAFF: "STAFF",
+};
 
 export const PERMISSIONS = {
-  SUPER_ADMIN: [
-    "dashboard",
-    "users",
-    "shops",
-    "products",
-    "productList",
-    "priceManagement",
-    "flashDeals",
-    "category",
-    "shop",
-    "orders",
-    "newOrders",
-    "payments",
-    "customers",
-    "backup",
-    "notifications",
-    "orderReport",
-    "banners",
-    "adminUsers",
-    "staffUsers",
-    "activityLogs",
-  ],
-  STAFF: ["staffDashboard", "product", "productList", "category"],
+  SUPER_ADMIN: SUPER_ADMIN_PERMISSIONS,
+  STAFF: DEFAULT_STAFF_PERMISSIONS,
 };
 
 const AuthContext = createContext(null);
+
+function normalizeRole(role) {
+  if (role === ROLES.SUPER_ADMIN) return ROLES.SUPER_ADMIN;
+  return ROLES.STAFF;
+}
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
@@ -65,7 +55,7 @@ export function AuthProvider({ children }) {
         try {
           await firebaseUser.getIdToken(true);
         } catch (tokenError) {
-          console.warn("âš ï¸ Token refresh failed:", tokenError.message);
+          console.warn("Token refresh failed:", tokenError.message);
         }
 
         setCurrentUser(firebaseUser);
@@ -76,7 +66,7 @@ export function AuthProvider({ children }) {
           const normalizedRole = String(adminData?.role || "").toLowerCase();
           if (normalizedRole === "admin" || normalizedRole === "superadmin") {
             applyLegacyAdmin(firebaseUser, adminData);
-            logLogin(firebaseUser, { role: "SUPER_ADMIN" });
+            logLogin(firebaseUser, { role: ROLES.SUPER_ADMIN });
             setAuthLoading(false);
             return;
           }
@@ -85,7 +75,7 @@ export function AuthProvider({ children }) {
         const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          if (userData?.status === "suspended") {
+          if (userData?.status === "suspended" || userData?.status === "disabled") {
             setAuthError("Your account has been suspended. Contact the super admin.");
             await firebaseSignOut(auth);
             resetAuthState();
@@ -107,7 +97,7 @@ export function AuthProvider({ children }) {
         await firebaseSignOut(auth);
         resetAuthState();
       } catch (error) {
-        console.error("ðŸ”¥ AuthContext error:", error);
+        console.error("AuthContext error:", error);
         setAuthError("Unable to verify account. Please try again later.");
         resetAuthState();
       }
@@ -119,34 +109,41 @@ export function AuthProvider({ children }) {
   }, []);
 
   const applyLegacyAdmin = (firebaseUser, adminData) => {
-    setUserRole("SUPER_ADMIN");
+    setUserRole(ROLES.SUPER_ADMIN);
     setUserName(adminData?.fullName || firebaseUser.displayName || firebaseUser.email || "Super Admin");
     setAssignedShopId(null);
     setAssignedShopName(null);
     setUserStatus("active");
-    setPermissions(PERMISSIONS.SUPER_ADMIN);
+    setPermissions(SUPER_ADMIN_PERMISSIONS);
   };
 
   const applyRBACUser = (firebaseUser, userData) => {
-    const role = userData?.role || "STAFF";
+    const role = normalizeRole(userData?.role);
     setUserRole(role);
     setUserName(userData?.name || firebaseUser.displayName || firebaseUser.email || "Staff");
     setUserStatus(userData?.status || "active");
     setAssignedShopId(userData?.assignedShopId || null);
     setAssignedShopName(userData?.assignedShopName || null);
-    setPermissions(role === "SUPER_ADMIN" ? PERMISSIONS.SUPER_ADMIN : PERMISSIONS.STAFF);
+
+    if (role === ROLES.SUPER_ADMIN) {
+      setPermissions(SUPER_ADMIN_PERMISSIONS);
+    } else if (Array.isArray(userData?.permissions) && userData.permissions.length > 0) {
+      setPermissions(userData.permissions);
+    } else {
+      setPermissions(DEFAULT_STAFF_PERMISSIONS);
+    }
   };
 
   const logLogin = async (firebaseUser, meta) => {
     logActivity({
       userId: firebaseUser.uid,
       userEmail: firebaseUser.email,
-      userRole: meta.role || "STAFF",
+      userRole: meta.role || ROLES.STAFF,
       action: "LOGIN",
       shopId: meta.assignedShopId || "",
       shopName: meta.assignedShopName || "",
       device: "Web Admin Panel",
-    }).catch((error) => console.warn("âš ï¸ Login activity failed:", error.message));
+    }).catch((error) => console.warn("Login activity failed:", error.message));
   };
 
   const resetAuthState = () => {
@@ -160,14 +157,16 @@ export function AuthProvider({ children }) {
   };
 
   const hasPermission = (tabId) => permissions.includes(tabId);
-  const isSuperAdmin = userRole === "SUPER_ADMIN";
-  const isStaff = userRole === "STAFF";
+  const isSuperAdmin = userRole === ROLES.SUPER_ADMIN;
+  const isStaff = userRole === ROLES.STAFF;
+  const roleLabel = isSuperAdmin ? "Super Admin" : "Staff";
 
   return (
     <AuthContext.Provider
       value={{
         currentUser,
         userRole,
+        roleLabel,
         assignedShopId,
         assignedShopName,
         userStatus,
@@ -182,7 +181,7 @@ export function AuthProvider({ children }) {
           try {
             await firebaseSignOut(auth);
           } catch (error) {
-            console.warn("âš ï¸ Sign out failed:", error.message);
+            console.warn("Sign out failed:", error.message);
           }
         },
       }}
@@ -194,8 +193,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 }

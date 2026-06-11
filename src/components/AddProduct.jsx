@@ -5,6 +5,10 @@ import { collection, addDoc, getDocs, query, where, serverTimestamp } from "fire
 import toast, { Toaster } from "react-hot-toast";
 import { FaBox, FaSave, FaImage, FaTimes, FaPercent, FaCalculator, FaSearch, FaCheckCircle, FaExclamationTriangle, FaSync, FaShieldAlt, FaCopy, FaRandom, FaLock } from "react-icons/fa";
 import { logActivity, ACTIONS } from "../utils/activityLogger";
+import { useShop } from "../contexts/ShopContext";
+import { loadShopCategories, getMainCategories, getSubcategories } from "../utils/categoryLoader";
+import { KNOWN_SHOP_NAMES, resolveShopDisplayName } from "../constants/shops";
+import PageShell from "./ui/PageShell";
 
 // Helpers
 const num = (v) => (typeof v === "number" && !isNaN(v) ? v : Number(v) || 0);
@@ -36,6 +40,8 @@ const PKRIcon = ({ className = "w-4 h-4" }) => (
 );
 
 export default function AddProduct({ assignedShopId = null, isStaff = false }) {
+  const { effectiveShopId, viewingAllShops } = useShop();
+
   // Product State
   const [product, setProduct] = useState({
     nameEn: "", nameUr: "", sku: "", description: "",
@@ -77,17 +83,29 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
   // Fetch Shops (STAFF: only their shop; SUPER_ADMIN: all shops)
   useEffect(() => {
     getDocs(collection(db, "shops")).then((snap) => {
-      setShops(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setShops(list.map((s) => ({ ...s, name: resolveShopDisplayName(s.id, {}, s.name) })));
     }).catch(() => toast.error("Failed to load shops!"));
   }, []);
 
-  // Auto-assign shop for STAFF
+  // Auto-assign shop for STAFF or Super Admin (header shop filter)
   useEffect(() => {
     if (isStaff && assignedShopId) {
       handleShopChange(assignedShopId);
+      return;
+    }
+    if (!isStaff && effectiveShopId && product.shopId !== effectiveShopId) {
+      handleShopChange(effectiveShopId);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStaff, assignedShopId]);
+  }, [isStaff, assignedShopId, effectiveShopId]);
+
+  // Auto-select when only one shop exists
+  useEffect(() => {
+    if (isStaff || product.shopId || shops.length !== 1) return;
+    handleShopChange(shops[0].id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shops, isStaff]);
 
   // Check Duplicate Product
   useEffect(() => {
@@ -209,11 +227,13 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
     if (!shopId) return;
 
     try {
-      const catSnap = await getDocs(collection(db, "shops", shopId, "categories"));
-      const cats = catSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const cats = await loadShopCategories(shopId);
       setAllCategories(cats);
-      setCategories(cats.filter((c) => !c.parentId));
-    } catch (err) {
+      setCategories(getMainCategories(cats));
+      if (cats.length === 0) {
+        toast.error("No categories found for this shop. Add categories first.");
+      }
+    } catch {
       toast.error("Failed to load categories!");
     }
   };
@@ -221,7 +241,7 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
   // Handle Category Change
   const handleCategoryChange = (categoryId) => {
     setProduct((prev) => ({ ...prev, category: categoryId, subcategory: "" }));
-    setSubcategories(allCategories.filter((s) => s.parentId === categoryId));
+    setSubcategories(getSubcategories(allCategories, categoryId));
     
     // Auto-generate SKU
     const cat = allCategories.find((c) => c.id === categoryId);
@@ -369,6 +389,7 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
         orderLimit: parseInt(product.orderLimit) || 10,
         status: product.status,
         shopId: product.shopId,
+        shopName: resolveShopDisplayName(product.shopId, {}, shops.find((s) => s.id === product.shopId)?.name),
         category: product.category,
         subcategory: product.subcategory || "",
         categoryName: cat?.name || "Uncategorized",
@@ -429,24 +450,9 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
   return (
     <>
       <Toaster position="top-right" />
-      
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 sm:p-6">
-        <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-6">
-          
-          {/* Header */}
-          <div className="p-5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                <FaBox className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  Add New Product
-                </h1>
-                <p className="text-gray-500 text-sm">Fill in the details to add a new product</p>
-              </div>
-            </div>
-          </div>
+
+      <PageShell title="Add New Product" subtitle="Fill in the details to add a new product" icon={FaBox}>
+        <form onSubmit={handleSubmit} className="space-y-6">
 
           {/* Main Form */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -455,7 +461,7 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
             <div className="lg:col-span-2 space-y-6">
               
               {/* Basic Info Card */}
-              <div className="p-5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl">
+              <div className="theme-card theme-glass p-5">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                   📝 Basic Information
                 </h3>
@@ -561,7 +567,7 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
               </div>
 
               {/* Pricing Card - MARGIN CALCULATOR */}
-              <div className="p-5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl">
+              <div className="theme-card theme-glass p-5">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <PKRIcon className="w-5 h-5" /> Pricing & Margin Calculator
                 </h3>
@@ -707,7 +713,7 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
               </div>
 
               {/* Inventory Card */}
-              <div className="p-5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl">
+              <div className="theme-card theme-glass p-5">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                   📦 Inventory & Stock
                 </h3>
@@ -764,7 +770,7 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
               </div>
 
               {/* Category Card */}
-              <div className="p-5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl">
+              <div className="theme-card theme-glass p-5">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                   🏷️ Category & Shop
                 </h3>
@@ -784,17 +790,25 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
                         <span className="ml-auto text-xs bg-indigo-200 text-indigo-700 px-2 py-0.5 rounded-full font-bold">LOCKED</span>
                       </div>
                     ) : (
-                      /* SUPER_ADMIN: full shop selector */
-                      <select
-                        value={product.shopId}
-                        onChange={(e) => handleShopChange(e.target.value)}
-                        className={`w-full p-3 rounded-xl border-2 bg-white/80 backdrop-blur-sm outline-none transition ${
-                          errors.shopId ? "border-red-400" : "border-gray-200 focus:border-blue-500"
-                        }`}
-                      >
-                        <option value="">Select Shop</option>
-                        {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
+                      <>
+                        <select
+                          value={product.shopId}
+                          onChange={(e) => handleShopChange(e.target.value)}
+                          className={`w-full p-3 theme-input ${
+                            errors.shopId ? "border-red-400" : ""
+                          }`}
+                        >
+                          <option value="">Select Shop</option>
+                          {shops.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        {viewingAllShops && !product.shopId && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                            Select a shop from header or dropdown to load categories.
+                          </p>
+                        )}
+                      </>
                     )}
                     {errors.shopId && <p className="text-red-500 text-xs mt-1">{errors.shopId}</p>}
                   </div>
@@ -806,11 +820,17 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
                       value={product.category}
                       onChange={(e) => handleCategoryChange(e.target.value)}
                       disabled={!product.shopId}
-                      className={`w-full p-3 rounded-xl border-2 bg-white/80 backdrop-blur-sm outline-none transition disabled:opacity-50 ${
-                        errors.category ? "border-red-400" : "border-gray-200 focus:border-blue-500"
+                      className={`w-full p-3 theme-input disabled:opacity-50 ${
+                        errors.category ? "border-red-400" : ""
                       }`}
                     >
-                      <option value="">Select Category</option>
+                      <option value="">
+                        {!product.shopId
+                          ? "Select shop first"
+                          : categories.length === 0
+                          ? "No categories — add in Categories page"
+                          : "Select Category"}
+                      </option>
                       {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                     {errors.category && <p className="text-red-500 text-xs mt-1">{errors.category}</p>}
@@ -836,7 +856,7 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
             <div className="space-y-6">
               
               {/* Image Upload Card */}
-              <div className="p-5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl">
+              <div className="theme-card theme-glass p-5">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <FaImage className="text-blue-500" /> Product Image
                 </h3>
@@ -880,7 +900,7 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
               </div>
 
               {/* Status Card */}
-              <div className="p-5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl">
+              <div className="theme-card theme-glass p-5">
                 <h3 className="text-lg font-bold text-gray-800 mb-4">⚙️ Status & Options</h3>
                 
                 <div className="space-y-4">
@@ -964,7 +984,7 @@ export default function AddProduct({ assignedShopId = null, isStaff = false }) {
             </div>
           </div>
         </form>
-      </div>
+      </PageShell>
     </>
   );
 }

@@ -6,8 +6,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { auth, db } from "../firebase";
-import { collection, doc, getDocs, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDocs } from "firebase/firestore";
 import { logActivity, ACTIONS } from "../utils/activityLogger";
+import notify from "../utils/notify";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -56,12 +57,12 @@ export default function ShopUserManager() {
   }, []);
 
   useEffect(() => {
-    setLoadingUsers(true);
-    const unsubscribe = onSnapshot(
-      collection(db, "users"),
-      (snapshot) => {
+    const loadUsers = async () => {
+      setLoadingUsers(true);
+      try {
+        const snapshot = await getDocs(collection(db, "users"));
         const users = snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .map((d) => ({ id: d.id, ...d.data() }))
           .filter((user) => user.role === "STAFF" || user.role === "SUPER_ADMIN")
           .sort((a, b) => {
             const aTs = a.createdAt?.seconds || a.createdAt?._seconds || 0;
@@ -69,15 +70,15 @@ export default function ShopUserManager() {
             return bTs - aTs;
           });
         setStaffUsers(users);
-        setLoadingUsers(false);
-      },
-      (error) => {
-        console.error("âŒ Users listener failed:", error);
+      } catch {
+        notify.error("Failed to load users");
+      } finally {
         setLoadingUsers(false);
       }
-    );
-
-    return () => unsubscribe();
+    };
+    loadUsers();
+    const timer = setInterval(loadUsers, 120000);
+    return () => clearInterval(timer);
   }, []);
 
   const validateForm = useCallback(() => {
@@ -85,7 +86,9 @@ export default function ShopUserManager() {
     if (!form.email.trim()) return "Email is required.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Please enter a valid email.";
     if (form.password.length < 6) return "Password must be at least 6 characters.";
-    if (form.role === "STAFF" && !form.assignedShopId) return "Please assign a shop for STAFF users.";
+    if (form.role === "STAFF" && !form.assignedShopId) {
+      return "Please assign a shop for STAFF users.";
+    }
 
     const normalizedEmail = form.email.trim().toLowerCase();
     if (staffUsers.some((user) => user.email?.toLowerCase() === normalizedEmail)) {
@@ -333,8 +336,8 @@ export default function ShopUserManager() {
                     disabled={creating}
                     className="w-full rounded-3xl border border-slate-300 px-4 py-3 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
                   >
-                    <option value="STAFF">STAFF</option>
-                    <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+                    <option value="STAFF">Staff</option>
+                    <option value="SUPER_ADMIN">Super Admin</option>
                   </select>
                 </div>
 

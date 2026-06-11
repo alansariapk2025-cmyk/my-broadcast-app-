@@ -13,6 +13,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { useShop } from "../contexts/ShopContext";
 import {
   FiStar, FiHeart, FiGift, FiShoppingCart, FiShoppingBag,
   FiAward, FiTag, FiCalendar, FiEdit2, FiTrash2, FiPlus, FiX,
@@ -27,9 +28,7 @@ import {
   IoMegaphoneOutline, IoBusinessOutline,
 } from "react-icons/io5";
 
-const SHOP_ID = "xKUNJfO0kSZK4yCEhh8s";
-
-// ✅ Icons Library (React Icons)
+// Icons Library (React Icons)
 const IONICONS_OPTIONS = [
   { name: "flash",        Icon: IoFlashOutline },
   { name: "star",         Icon: FiStar },
@@ -104,6 +103,9 @@ const calcFinalPrice = (product, offerType, offerValue) => {
 // MAIN COMPONENT
 // ============================================================
 export default function FlashDealsManager() {
+  const { effectiveShopId, shops } = useShop();
+  const SHOP_ID = effectiveShopId || shops[0]?.id;
+
   const [sessions, setSessions] = useState([]);
   const [products, setProducts] = useState([]);
   const [editingSession, setEditingSession] = useState(null);
@@ -112,6 +114,10 @@ export default function FlashDealsManager() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!SHOP_ID) {
+      setLoading(false);
+      return;
+    }
     const unsub = onSnapshot(
       query(collection(db, "shops", SHOP_ID, "flashDealSessions"), orderBy("order", "asc")),
       (snap) => {
@@ -121,7 +127,7 @@ export default function FlashDealsManager() {
       (err) => { console.error(err); setLoading(false); }
     );
     return () => unsub();
-  }, []);
+  }, [SHOP_ID]);
 
   useEffect(() => {
     getDocs(collection(db, "products")).then((snap) => {
@@ -207,6 +213,7 @@ export default function FlashDealsManager() {
   return (
     <>
       <style>{globalCSS}</style>
+      <div className="theme-page-root">
       <div style={S.container}>
         {/* HEADER */}
         <div style={S.headerCard}>
@@ -229,8 +236,8 @@ export default function FlashDealsManager() {
         <div style={S.infoBox}>
           <FiInfo size={18} color="#3b82f6" style={{ flexShrink: 0 }} />
           <div>
-            <strong style={{ color: "#1e40af" }}>How it works: </strong>
-            <span style={{ color: "#1e3a8a" }}>
+            <strong style={{ color: "#93c5fd" }}>How it works: </strong>
+            <span style={{ color: "#cbd5e1" }}>
               Create sessions → Add products → Set offers → Set date range → Toggle Active. Real-time updates!
             </span>
           </div>
@@ -238,10 +245,10 @@ export default function FlashDealsManager() {
 
         {/* STATS ROW */}
         <div style={S.statsRow}>
-          <StatCard icon={<FiLayers size={22} color="#fff" />} label="Total Sessions" value={sessions.length} gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)" />
-          <StatCard icon={<FiCheck size={22} color="#fff" />} label="Active" value={sessions.filter(s => s.active).length} gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)" />
-          <StatCard icon={<FiPackage size={22} color="#fff" />} label="Total Products" value={sessions.reduce((sum, s) => sum + (s.productIds?.length || 0), 0)} gradient="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" />
-          <StatCard icon={<FiTag size={22} color="#fff" />} label="Active Offers" value={sessions.reduce((sum, s) => sum + Object.keys(s.offers || {}).length, 0)} gradient="linear-gradient(135deg, #fa709a 0%, #fee140 100%)" />
+          <StatCard icon={<FiLayers size={22} color="#fff" />} label="Total Sessions" value={sessions.length} gradient="linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)" />
+          <StatCard icon={<FiCheck size={22} color="#fff" />} label="Active" value={sessions.filter(s => s.active).length} gradient="linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)" />
+          <StatCard icon={<FiPackage size={22} color="#fff" />} label="Total Products" value={sessions.reduce((sum, s) => sum + (s.productIds?.length || 0), 0)} gradient="linear-gradient(135deg, #2563eb 0%, #6366f1 100%)" />
+          <StatCard icon={<FiTag size={22} color="#fff" />} label="Active Offers" value={sessions.reduce((sum, s) => sum + Object.keys(s.offers || {}).length, 0)} gradient="linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%)" />
         </div>
 
         {/* SESSIONS GRID */}
@@ -282,6 +289,7 @@ export default function FlashDealsManager() {
             onRemoveOffer={(pid) => removeOffer(editingSession.id, pid)}
           />
         )}
+      </div>
       </div>
     </>
   );
@@ -478,10 +486,10 @@ function CreateModal({ onClose, onCreate }) {
 
   return (
     <div style={S.modalBg} onClick={onClose} className="modal-fade-in">
-      <div style={S.modal} onClick={(e) => e.stopPropagation()} className="modal-slide-in">
+      <div style={S.modal} onClick={(e) => e.stopPropagation()} className="modal-slide-in flash-deals-modal">
         <div style={S.modalHeader}>
           <h2 style={S.modalTitle}>
-            <IoSparklesOutline size={22} color="#f59e0b" /> Create New Session
+            <IoSparklesOutline size={22} color="#3b82f6" /> Create New Session
           </h2>
           <button style={S.closeX} onClick={onClose}>
             <FiX size={22} />
@@ -497,9 +505,9 @@ function CreateModal({ onClose, onCreate }) {
             {PRESET_THEMES.map((p) => (
               <button
                 key={p.name}
-                style={{ ...S.presetBtn, background: `linear-gradient(135deg, ${p.color}, ${p.color}cc)` }}
+                style={{ ...S.presetBtn, background: `linear-gradient(135deg, ${p.color}dd, ${p.color}99)` }}
                 onClick={() => usePreset(p)}
-                className="btn-hover"
+                className="btn-hover flash-deals-preset"
               >
                 {getIconComponent(p.iconName, 14, "#fff")} {p.name}
               </button>
@@ -516,7 +524,7 @@ function CreateModal({ onClose, onCreate }) {
         <div style={S.field}>
           <label style={S.label}>App Icon:</label>
           <div style={{ position: "relative" }}>
-            <button style={{ ...S.iconDropBtn, borderColor: themeColor }} onClick={() => setShowIconDD(!showIconDD)}>
+            <button style={{ ...S.iconDropBtn, borderColor: showIconDD ? "#3b82f6" : "#334155" }} onClick={() => setShowIconDD(!showIconDD)}>
               <span style={S.iconDropEmoji}>{getIconComponent(iconName, 22, themeColor)}</span>
               <span style={S.iconDropName}>{iconName}</span>
               <FiX size={12} style={{ transform: showIconDD ? "rotate(45deg)" : "none", transition: "transform 0.2s" }} />
@@ -533,8 +541,8 @@ function CreateModal({ onClose, onCreate }) {
                     }}
                     onClick={() => { setIconName(ic.name); setShowIconDD(false); }}
                   >
-                    {getIconComponent(ic.name, 20, iconName === ic.name ? themeColor : "#374151")}
-                    <span style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{ic.name}</span>
+                    {getIconComponent(ic.name, 20, iconName === ic.name ? themeColor : "#94a3b8")}
+                    <span style={{ fontSize: 10, color: iconName === ic.name ? "#f1f5f9" : "#64748b", marginTop: 2 }}>{ic.name}</span>
                   </button>
                 ))}
               </div>
@@ -562,16 +570,16 @@ function CreateModal({ onClose, onCreate }) {
             <input type="datetime-local" style={S.input} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
         </div>
-        <small style={{ color: "#6b7280", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
-          <FiInfo size={11} /> Leave empty = always active when toggled ON
+        <small style={{ color: "#64748b", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+          <FiInfo size={11} color="#3b82f6" /> Leave empty = always active when toggled ON
         </small>
 
         <div style={S.modalActions}>
           <button style={S.cancelBtn} onClick={onClose} className="btn-hover">Cancel</button>
           <button
-            style={{ ...S.saveBtn, background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
+            style={S.saveBtn}
             onClick={() => {
-              if (!name.trim()) return alert("⚠️ Enter a session name");
+              if (!name.trim()) return alert("Enter a session name");
               onCreate({
                 name, iconName, themeColor, subtitle,
                 startDate: startDate ? fromDatetimeLocal(startDate) : null,
@@ -620,7 +628,7 @@ function EditModal({
 
   return (
     <div style={S.modalBg} onClick={onClose} className="modal-fade-in">
-      <div style={S.modalLarge} onClick={(e) => e.stopPropagation()} className="modal-slide-in">
+      <div style={S.modalLarge} onClick={(e) => e.stopPropagation()} className="modal-slide-in flash-deals-modal">
         <div style={S.modalHeader}>
           <h2 style={S.modalTitle}>
             <span style={{ ...S.sessionIconBox, background: `linear-gradient(135deg, ${themeColor}, ${themeColor}dd)`, width: 36, height: 36 }}>
@@ -663,7 +671,7 @@ function EditModal({
               <div style={S.field}>
                 <label style={S.label}>App Icon:</label>
                 <div style={{ position: "relative" }}>
-                  <button style={{ ...S.iconDropBtn, borderColor: themeColor }} onClick={() => setShowIconDD(!showIconDD)}>
+                  <button style={{ ...S.iconDropBtn, borderColor: showIconDD ? "#3b82f6" : "#334155" }} onClick={() => setShowIconDD(!showIconDD)}>
                     <span style={S.iconDropEmoji}>{getIconComponent(iconName, 22, themeColor)}</span>
                     <span style={S.iconDropName}>{iconName}</span>
                   </button>
@@ -678,8 +686,8 @@ function EditModal({
                           }}
                           onClick={() => { setIconName(ic.name); setShowIconDD(false); }}
                         >
-                          {getIconComponent(ic.name, 20, iconName === ic.name ? themeColor : "#374151")}
-                          <span style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{ic.name}</span>
+                          {getIconComponent(ic.name, 20, iconName === ic.name ? themeColor : "#94a3b8")}
+                          <span style={{ fontSize: 10, color: iconName === ic.name ? "#f1f5f9" : "#64748b", marginTop: 2 }}>{ic.name}</span>
                         </button>
                       ))}
                     </div>
@@ -715,7 +723,7 @@ function EditModal({
             </div>
 
             <button
-              style={{ ...S.saveBtn, background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)`, marginTop: 16 }}
+              style={{ ...S.saveBtn, marginTop: 16 }}
               onClick={saveInfo}
               className="btn-hover"
             >
@@ -969,8 +977,20 @@ const globalCSS = `
     transition: background 0.15s ease, transform 0.15s ease;
   }
   .product-list-item:hover {
-    background: rgba(255,255,255,0.95) !important;
+    background: rgba(59, 130, 246, 0.08) !important;
     transform: translateX(2px);
+  }
+  .flash-deals-modal input,
+  .flash-deals-modal select,
+  .flash-deals-modal textarea {
+    color-scheme: dark;
+  }
+  .flash-deals-modal input::placeholder {
+    color: #64748b;
+  }
+  .flash-deals-preset:hover {
+    border-color: rgba(59, 130, 246, 0.5) !important;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.2);
   }
   .custom-scroll::-webkit-scrollbar {
     width: 6px;
@@ -994,18 +1014,18 @@ const globalCSS = `
 // ============================================================
 const S = {
   container: {
-    padding: 24,
-    background: "linear-gradient(135deg, #e0e7ff 0%, #fce7f3 50%, #ddd6fe 100%)",
-    minHeight: "100vh",
+    padding: 0,
+    background: "transparent",
+    minHeight: "auto",
     fontFamily: "'Inter', system-ui, sans-serif",
   },
   loadingContainer: {
-    minHeight: "100vh",
+    minHeight: "50vh",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    background: "linear-gradient(135deg, #e0e7ff 0%, #fce7f3 50%, #ddd6fe 100%)",
+    background: "transparent",
   },
   loadingSpinner: {
     animation: "spin 1.2s linear infinite",
@@ -1018,7 +1038,7 @@ const S = {
   },
   // HEADER
   headerCard: {
-    background: "rgba(255,255,255,0.7)",
+    background: "rgba(15, 23, 42, 0.65)",
     backdropFilter: "blur(20px)",
     WebkitBackdropFilter: "blur(20px)",
     borderRadius: 20,
@@ -1029,8 +1049,8 @@ const S = {
     alignItems: "center",
     flexWrap: "wrap",
     gap: 16,
-    border: "1px solid rgba(255,255,255,0.5)",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.06)",
+    border: "1px solid rgba(59, 130, 246, 0.25)",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
   },
   headerLeft: {
     display: "flex",
@@ -1041,27 +1061,27 @@ const S = {
     width: 56,
     height: 56,
     borderRadius: 16,
-    background: "linear-gradient(135deg, #f59e0b, #ef4444)",
+    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 8px 20px rgba(245,158,11,0.35)",
+    boxShadow: "0 8px 20px rgba(37,99,235,0.35)",
   },
   title: {
     fontSize: 24,
     fontWeight: 800,
-    color: "#0f172a",
+    color: "#f1f5f9",
     margin: 0,
     letterSpacing: "-0.5px",
   },
   subtitleText: {
     fontSize: 13,
-    color: "#64748b",
+    color: "#94a3b8",
     margin: "4px 0 0",
   },
   createBtn: {
     padding: "12px 22px",
-    background: "linear-gradient(135deg, #16a34a, #22c55e)",
+    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
     color: "#fff",
     border: "none",
     borderRadius: 12,
@@ -1071,21 +1091,22 @@ const S = {
     display: "flex",
     alignItems: "center",
     gap: 8,
-    boxShadow: "0 8px 20px rgba(22,163,74,0.35)",
+    boxShadow: "0 8px 20px rgba(37,99,235,0.35)",
     transition: "all 0.2s ease",
   },
   // INFO BOX
   infoBox: {
     padding: 14,
-    background: "rgba(239,246,255,0.7)",
+    background: "rgba(15, 23, 42, 0.55)",
     backdropFilter: "blur(10px)",
-    border: "1px solid rgba(191,219,254,0.6)",
+    border: "1px solid rgba(59, 130, 246, 0.25)",
     borderRadius: 14,
     marginBottom: 20,
     fontSize: 13,
     display: "flex",
     alignItems: "center",
     gap: 10,
+    color: "#cbd5e1",
   },
   // STATS
   statsRow: {
@@ -1395,28 +1416,30 @@ const S = {
     padding: 20,
   },
   modal: {
-    background: "rgba(255,255,255,0.95)",
+    background: "rgba(15, 23, 42, 0.92)",
     backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
     borderRadius: 20,
     padding: 24,
     width: "100%",
     maxWidth: 580,
     maxHeight: "90vh",
     overflow: "auto",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-    border: "1px solid rgba(255,255,255,0.5)",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+    border: "1px solid rgba(59, 130, 246, 0.25)",
   },
   modalLarge: {
-    background: "rgba(255,255,255,0.95)",
+    background: "rgba(15, 23, 42, 0.92)",
     backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
     borderRadius: 20,
     padding: 24,
     width: "100%",
     maxWidth: 980,
     maxHeight: "92vh",
     overflow: "auto",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-    border: "1px solid rgba(255,255,255,0.5)",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+    border: "1px solid rgba(59, 130, 246, 0.25)",
   },
   modalHeader: {
     display: "flex",
@@ -1424,25 +1447,25 @@ const S = {
     alignItems: "center",
     marginBottom: 18,
     paddingBottom: 14,
-    borderBottom: "1px solid rgba(0,0,0,0.06)",
+    borderBottom: "1px solid rgba(59, 130, 246, 0.15)",
   },
   modalTitle: {
     fontSize: 19,
     fontWeight: 800,
-    color: "#0f172a",
+    color: "#f1f5f9",
     margin: 0,
     display: "flex",
     alignItems: "center",
     gap: 10,
   },
   closeX: {
-    background: "rgba(0,0,0,0.05)",
-    border: "none",
+    background: "rgba(30, 41, 59, 0.8)",
+    border: "1px solid rgba(59, 130, 246, 0.2)",
     width: 36,
     height: 36,
     borderRadius: 10,
     cursor: "pointer",
-    color: "#475569",
+    color: "#94a3b8",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1451,7 +1474,7 @@ const S = {
   // TABS
   tabBar: {
     display: "flex",
-    borderBottom: "2px solid rgba(0,0,0,0.06)",
+    borderBottom: "2px solid rgba(59, 130, 246, 0.15)",
     marginBottom: 20,
     gap: 0,
   },
@@ -1462,7 +1485,7 @@ const S = {
     cursor: "pointer",
     fontSize: 13,
     fontWeight: 700,
-    color: "#64748b",
+    color: "#94a3b8",
     borderBottom: "2px solid transparent",
     marginBottom: -2,
     display: "flex",
@@ -1477,21 +1500,22 @@ const S = {
     display: "flex",
     alignItems: "center",
     gap: 6,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 700,
-    color: "#1e293b",
+    color: "#94a3b8",
     marginBottom: 6,
     textTransform: "uppercase",
-    letterSpacing: "0.4px",
+    letterSpacing: "0.5px",
   },
   input: {
     width: "100%",
     padding: "11px 14px",
-    border: "1.5px solid #e5e7eb",
-    borderRadius: 10,
+    border: "1px solid #334155",
+    borderRadius: 12,
     fontSize: 14,
     boxSizing: "border-box",
-    background: "#fff",
+    background: "#1e293b",
+    color: "#f1f5f9",
     transition: "border-color 0.15s, box-shadow 0.15s",
     fontFamily: "inherit",
     outline: "none",
@@ -1516,16 +1540,17 @@ const S = {
   },
   presetBtn: {
     padding: "10px 12px",
-    color: "#fff",
-    border: "none",
-    borderRadius: 10,
+    color: "#f1f5f9",
+    border: "1px solid rgba(59, 130, 246, 0.2)",
+    borderRadius: 12,
     cursor: "pointer",
     fontSize: 12,
     fontWeight: 700,
     display: "flex",
     alignItems: "center",
     gap: 6,
-    boxShadow: "0 4px 10px rgba(0,0,0,0.12)",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+    backdropFilter: "blur(8px)",
   },
   // ICON DROPDOWN
   iconDropBtn: {
@@ -1533,37 +1558,39 @@ const S = {
     alignItems: "center",
     gap: 10,
     padding: "10px 14px",
-    border: "2px solid #e5e7eb",
-    borderRadius: 10,
+    border: "1px solid #334155",
+    borderRadius: 12,
     cursor: "pointer",
-    background: "#fff",
+    background: "#1e293b",
     fontSize: 14,
     width: "100%",
-    transition: "border-color 0.15s",
+    transition: "border-color 0.15s, box-shadow 0.15s",
+    color: "#f1f5f9",
   },
   iconDropEmoji: { display: "flex" },
   iconDropName: {
     flex: 1,
     textAlign: "left",
     fontWeight: 600,
-    color: "#1e293b",
+    color: "#f1f5f9",
   },
   iconDropdown: {
     position: "absolute",
     top: "calc(100% + 6px)",
     left: 0,
     right: 0,
-    background: "#fff",
-    border: "1px solid #e5e7eb",
+    background: "rgba(15, 23, 42, 0.98)",
+    border: "1px solid rgba(59, 130, 246, 0.25)",
     borderRadius: 12,
     zIndex: 999,
     maxHeight: 260,
     overflowY: "auto",
-    boxShadow: "0 12px 28px rgba(0,0,0,0.15)",
+    boxShadow: "0 12px 28px rgba(0,0,0,0.4)",
     display: "grid",
     gridTemplateColumns: "repeat(4, 1fr)",
     padding: 6,
     gap: 4,
+    backdropFilter: "blur(16px)",
   },
   iconDropItem: {
     display: "flex",
@@ -1571,11 +1598,11 @@ const S = {
     alignItems: "center",
     gap: 3,
     padding: "10px 6px",
-    border: "none",
+    border: "1px solid transparent",
     cursor: "pointer",
     borderRadius: 8,
     background: "transparent",
-    transition: "background 0.15s",
+    transition: "background 0.15s, border-color 0.15s",
   },
   // PRODUCTS
   searchBox: {
@@ -1787,29 +1814,30 @@ const S = {
     justifyContent: "flex-end",
     marginTop: 22,
     paddingTop: 16,
-    borderTop: "1px solid rgba(0,0,0,0.06)",
+    borderTop: "1px solid rgba(59, 130, 246, 0.15)",
   },
   cancelBtn: {
     padding: "11px 22px",
-    background: "#f1f5f9",
-    color: "#0f172a",
-    border: "none",
-    borderRadius: 10,
+    background: "rgba(30, 41, 59, 0.8)",
+    color: "#cbd5e1",
+    border: "1px solid #334155",
+    borderRadius: 12,
     cursor: "pointer",
-    fontWeight: 700,
+    fontWeight: 600,
     fontSize: 13,
   },
   saveBtn: {
     padding: "11px 22px",
     color: "#fff",
     border: "none",
-    borderRadius: 10,
+    borderRadius: 12,
     cursor: "pointer",
-    fontWeight: 800,
+    fontWeight: 700,
     fontSize: 13,
     display: "flex",
     alignItems: "center",
     gap: 6,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+    boxShadow: "0 4px 16px rgba(37, 99, 235, 0.35)",
   },
 };

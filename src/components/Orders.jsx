@@ -1,7 +1,11 @@
 // src/components/Orders.jsx
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { db } from "../firebase";
-import { collection, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, updateDoc, deleteDoc, doc, query, orderBy } from "firebase/firestore";
+import { useShop } from "../contexts/ShopContext";
+import { filterByShop } from "../utils/shopUtils";
+import notify from "../utils/notify";
+import PageShell, { SectionCard } from "./ui/PageShell";
 import { FaTrash, FaMotorcycle, FaSearch, FaDownload, FaUpload, FaFilter, FaTimes, FaSync, FaPrint, FaEye, FaBoxOpen, FaBell } from "react-icons/fa";
 import { Workbook } from "exceljs";
 import { saveAs } from "file-saver";
@@ -52,7 +56,10 @@ const NewOrderBadge = () => (
   </span>
 );
 
-export default function Orders({ onNavigate }) {
+export default function Orders({ onNavigate, assignedShopId: propShopId }) {
+  const { effectiveShopId: ctxShopId } = useShop();
+  const effectiveShopId = propShopId || ctxShopId;
+
   const [orders, setOrders] = useState([]);
   const [charges, setCharges] = useState({});
   const [loading, setLoading] = useState(true);
@@ -71,15 +78,28 @@ export default function Orders({ onNavigate }) {
 
   const isNewOrder = useCallback((o) => NEW_STATUSES.includes(o.status || "Pending"), []);
 
-  useEffect(() => {
-    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  const fetchOrders = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (effectiveShopId) list = filterByShop(list, effectiveShopId);
+      setOrders(list);
+    } catch (err) {
+      console.error("Orders fetch error:", err);
+      notify.error("Failed to load orders");
+    } finally {
       setLoading(false);
       setRefreshing(false);
-    }, () => { setLoading(false); setRefreshing(false); });
-    return () => unsub();
-  }, []);
+    }
+  }, [effectiveShopId]);
+
+  useEffect(() => {
+    fetchOrders();
+    const timer = setInterval(() => fetchOrders(true), 90_000);
+    return () => clearInterval(timer);
+  }, [fetchOrders]);
 
   const filtered = useMemo(() => {
     const now = new Date();
@@ -184,85 +204,83 @@ export default function Orders({ onNavigate }) {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 sm:p-6">
-      {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">📦 Orders</h1>
-          <p className="text-gray-500 text-sm">Manage all orders</p>
-        </div>
+    <PageShell
+      title="Orders"
+      subtitle="Manage all customer orders"
+      icon={FaBoxOpen}
+      actions={
         <div className="flex gap-2">
-          <button onClick={() => setRefreshing(true)} className={`p-2 bg-white rounded-xl shadow ${refreshing ? "animate-spin" : ""}`}>
-            <FaSync className="w-5 h-5 text-blue-600" />
+          <button type="button" onClick={() => { setRefreshing(true); fetchOrders(true); }} className={`theme-btn-secondary p-2.5 ${refreshing ? "animate-spin" : ""}`}>
+            <FaSync className="w-5 h-5" />
           </button>
-          <button onClick={() => onNavigate?.("newOrders")} className="relative px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold shadow">
-            🔔 New Orders
-            {stats.new > 0 && <span className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center bg-red-600 text-white text-xs font-bold rounded-full animate-bounce">{stats.new}</span>}
+          <button type="button" onClick={() => onNavigate?.("newOrders")} className="theme-btn-primary relative">
+            <FaBell className="w-4 h-4" /> New Orders
+            {stats.new > 0 && <span className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">{stats.new}</span>}
           </button>
         </div>
+      }
+    >
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="stat-card p-3"><p className="text-xs theme-page-muted">Total</p><p className="text-xl font-bold theme-page-title">{stats.total}</p></div>
+        <div className="theme-stat-accent p-3"><p className="text-xs opacity-80">New</p><p className="text-xl font-bold">{stats.new}</p></div>
+        <div className="stat-card p-3"><p className="text-xs theme-page-muted">Active</p><p className="text-xl font-bold theme-highlight">{stats.active}</p></div>
+        <div className="stat-card p-3"><p className="text-xs theme-page-muted">Today</p><p className="text-xl font-bold theme-highlight">{stats.today}</p></div>
+        <div className="theme-stat-accent p-3"><p className="text-xs opacity-80">Sales</p><p className="text-lg font-bold">PKR {stats.sales.toLocaleString()}</p></div>
+        <div className="stat-card p-3"><p className="text-xs theme-page-muted">Delivery</p><p className="text-lg font-bold theme-highlight">PKR {stats.delivery.toLocaleString()}</p></div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-        <div className="bg-white rounded-xl p-3 shadow"><p className="text-xs text-gray-500">Total</p><p className="text-xl font-bold">{stats.total}</p></div>
-        <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-3 shadow text-white"><p className="text-xs opacity-80">New</p><p className="text-xl font-bold">{stats.new}</p></div>
-        <div className="bg-white rounded-xl p-3 shadow"><p className="text-xs text-gray-500">Active</p><p className="text-xl font-bold text-blue-600">{stats.active}</p></div>
-        <div className="bg-white rounded-xl p-3 shadow"><p className="text-xs text-gray-500">Today</p><p className="text-xl font-bold text-purple-600">{stats.today}</p></div>
-        <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl p-3 shadow text-white"><p className="text-xs opacity-80">Sales</p><p className="text-lg font-bold">PKR {stats.sales.toLocaleString()}</p></div>
-        <div className="bg-white rounded-xl p-3 shadow"><p className="text-xs text-gray-500">Delivery</p><p className="text-lg font-bold text-indigo-600">PKR {stats.delivery.toLocaleString()}</p></div>
-      </div>
-
-      {/* Search & Filters */}
-      <div className="bg-white rounded-xl shadow p-4 mb-4">
+      <SectionCard title="Search & Filters">
         <div className="flex flex-wrap gap-3 items-center">
           <div className="flex-1 min-w-[200px] relative">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 theme-page-muted" />
             <input type="text" placeholder="Search..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="w-full pl-10 pr-4 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
+              className="theme-input w-full pl-10 pr-4 py-2.5" />
           </div>
-          <button onClick={() => setShowFilters(!showFilters)} className={`px-4 py-2.5 rounded-xl font-semibold ${showFilters ? "bg-blue-500 text-white" : "bg-gray-100"}`}>
+          <button type="button" onClick={() => setShowFilters(!showFilters)} className={showFilters ? "theme-btn-primary" : "theme-btn-secondary"}>
             <FaFilter className="inline w-4 h-4 mr-1" /> Filters
           </button>
-          <button onClick={exportToExcel} className="px-4 py-2.5 bg-green-500 text-white rounded-xl font-semibold"><FaDownload className="inline w-4 h-4 mr-1" /> Export</button>
+          <button type="button" onClick={exportToExcel} className="theme-btn-primary"><FaDownload className="inline w-4 h-4 mr-1" /> Export</button>
         </div>
 
         {showFilters && (
-          <div className="mt-4 pt-4 border-t grid grid-cols-2 md:grid-cols-5 gap-3">
-            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="p-2.5 border rounded-xl text-sm">
+          <div className="mt-4 pt-4 border-t theme-card-inner grid grid-cols-2 md:grid-cols-5 gap-3 p-4 rounded-xl">
+            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="theme-select">
               <option value="all">All Status</option>
               {[...NEW_STATUSES, ...MAIN_STATUSES].map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-            <select value={ageFilter} onChange={(e) => { setAgeFilter(e.target.value); setPage(1); }} className="p-2.5 border rounded-xl text-sm">
+            <select value={ageFilter} onChange={(e) => { setAgeFilter(e.target.value); setPage(1); }} className="theme-select">
               <option value="all">All Time</option>
               <option value="1h">Last 1h</option>
               <option value="24h">Last 24h</option>
               <option value="7d">Last 7 Days</option>
               <option value="30d">Last 30 Days</option>
             </select>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="p-2.5 border rounded-xl text-sm" />
-            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="p-2.5 border rounded-xl text-sm" />
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="p-2.5 border rounded-xl text-sm">
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="theme-input" />
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="theme-input" />
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="theme-select">
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
               <option value="amount-high">Amount ↓</option>
               <option value="amount-low">Amount ↑</option>
             </select>
-            <button onClick={clearFilters} className="text-red-500 text-sm font-semibold"><FaTimes className="inline w-3 h-3" /> Clear</button>
+            <button type="button" onClick={clearFilters} className="theme-btn-danger text-sm"><FaTimes className="inline w-3 h-3" /> Clear</button>
           </div>
         )}
-      </div>
+      </SectionCard>
 
       {/* Orders Table */}
       {current.length === 0 ? (
-        <div className="bg-white rounded-xl shadow p-12 text-center">
-          <FaBoxOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No orders found</p>
-        </div>
+        <SectionCard>
+          <div className="py-12 text-center">
+            <FaBoxOpen className="w-16 h-16 theme-page-muted mx-auto mb-4 opacity-40" />
+            <p className="theme-page-muted">No orders found</p>
+          </div>
+        </SectionCard>
       ) : (
-        <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
+        <div className="theme-table-wrap mb-6">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white">
+              <thead>
                 <tr>
                   <th className="p-3 text-left">Order</th>
                   <th className="p-3 text-left">Customer</th>
@@ -398,6 +416,6 @@ export default function Orders({ onNavigate }) {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

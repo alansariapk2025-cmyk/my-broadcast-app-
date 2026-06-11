@@ -6,6 +6,8 @@ import { Bar, Pie } from "react-chartjs-2";
 import "chart.js/auto";
 import { saveAs } from "file-saver";
 import { Workbook } from "exceljs";
+import PageShell, { SectionCard } from "./ui/PageShell";
+import { TrendingUp, FileSpreadsheet } from "lucide-react";
 
 const num = (v) =>
   typeof v === "number" && !isNaN(v) ? v : Number(v) || 0;
@@ -237,144 +239,80 @@ export default function OrderReportAdvanced() {
   };
 
   return (
-    <div className="p-6 min-h-screen bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100 space-y-6">
-      {/* Search & totals */}
-      <div className="flex flex-wrap gap-4 items-center justify-between">
-        <input
-          type="text"
-          placeholder="Search Order ID, Customer, Category..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="border p-2 rounded-lg shadow-inner w-72"
-        />
-        <div className="flex flex-col gap-1 text-right">
-          <span className="font-bold text-lg">
-            Total Earnings: PKR{" "}
-            {totalEarnings.toLocaleString()}
-          </span>
-          <span className="font-bold text-lg text-green-700">
-            Total Profit: PKR{" "}
-            {totalProfit.toLocaleString()}
-          </span>
-        </div>
-        <button
-          onClick={exportExcel}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-md"
-        >
-          Export Excel
+    <PageShell
+      title="Order Reports"
+      subtitle="Advanced analytics, earnings & profit tracking"
+      icon={TrendingUp}
+      actions={
+        <button type="button" onClick={exportExcel} className="theme-btn-primary">
+          <FileSpreadsheet className="w-4 h-4" /> Export Excel
         </button>
-      </div>
+      }
+    >
+      <SectionCard title="Overview">
+        <div className="flex flex-wrap gap-4 items-end justify-between">
+          <input
+            type="text"
+            placeholder="Search Order ID, Customer, Category..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="theme-input w-full sm:w-72"
+          />
+          <div className="flex flex-col gap-1 text-right">
+            <span className="font-bold text-lg theme-page-title">
+              Total Earnings: <span className="theme-highlight">PKR {totalEarnings.toLocaleString()}</span>
+            </span>
+            <span className="font-bold text-lg theme-page-title">
+              Total Profit: <span className="theme-highlight">PKR {totalProfit.toLocaleString()}</span>
+            </span>
+          </div>
+        </div>
+      </SectionCard>
 
-      {/* Orders Table */}
-      <div className="bg-white/70 backdrop-blur-md border border-red-300 p-4 rounded-2xl shadow-xl">
-        <h3 className="font-bold text-lg mb-4 text-blue-700">
-          Filtered Orders
-        </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-gray-200 text-sm">
-            <thead className="bg-blue-200 text-blue-900 font-semibold">
-              <tr>
-                <th className="border p-2">Order ID</th>
-                <th className="border p-2">Customer</th>
-                <th className="border p-2">Category</th>
-                <th className="border p-2">Total</th>
-                <th className="border p-2">Cost</th>
-                <th className="border p-2">Profit</th>
-                <th className="border p-2">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentPageOrders.map((o) => (
-                <tr
-                  key={o.id}
-                  className="hover:bg-blue-50 transition"
-                >
-                  <td className="border p-2 font-semibold text-blue-600">
-                    {o.id}
-                  </td>
-                  <td className="border p-2">
-                    {o.customerName}
-                  </td>
-                  <td className="border p-2">
-                    {o.category}
-                  </td>
-                  <td className="border p-2 font-semibold text-green-700">
-                    {o.total}
-                  </td>
-                  <td className="border p-2">
-                    {o.cost}
-                  </td>
-                  <td className="border p-2">
-                    {o.profit}
-                  </td>
-                  <td className="border p-2">
-                    {o.date.toLocaleString()}
-                  </td>
+      <SectionCard title="Filtered Orders">
+        <div className="theme-table-wrap">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="p-3 text-left">Order ID</th>
+                  <th className="p-3 text-left">Customer</th>
+                  <th className="p-3 text-left">Category</th>
+                  <th className="p-3 text-left">Total</th>
+                  <th className="p-3 text-left">Cost</th>
+                  <th className="p-3 text-left">Profit</th>
+                  <th className="p-3 text-left">Date</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {currentPageOrders.map((o) => (
+                  <tr key={o.id} className="border-t theme-card-inner hover:bg-blue-500/5">
+                    <td className="p-3 font-semibold theme-highlight">{o.id}</td>
+                    <td className="p-3 theme-page-title">{o.customerName}</td>
+                    <td className="p-3 theme-page-muted">{o.category}</td>
+                    <td className="p-3 font-semibold theme-highlight">{o.total}</td>
+                    <td className="p-3 theme-page-muted">{o.cost}</td>
+                    <td className="p-3 theme-page-title">{o.profit}</td>
+                    <td className="p-3 text-xs theme-page-muted">{o.date.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Pagination */}
         <div className="flex justify-center mt-4 gap-2">
-          <button
-            onClick={() =>
-              setPage((p) => Math.max(p - 1, 1))
-            }
-            disabled={page === 1}
-            className="px-3 py-1 bg-blue-500 text-white rounded-lg disabled:opacity-40"
-          >
-            Prev
-          </button>
-          <span className="px-3 py-1 font-semibold">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            onClick={() =>
-              setPage((p) =>
-                Math.min(p + 1, totalPages)
-              )
-            }
-            disabled={page === totalPages}
-            className="px-3 py-1 bg-blue-500 text-white rounded-lg disabled:opacity-40"
-          >
-            Next
-          </button>
+          <button type="button" onClick={() => setPage((p) => Math.max(p - 1, 1))} disabled={page === 1} className="theme-btn-secondary text-sm disabled:opacity-40">Prev</button>
+          <span className="px-3 py-1 font-semibold theme-page-title">Page {page} of {totalPages}</span>
+          <button type="button" onClick={() => setPage((p) => Math.min(p + 1, totalPages))} disabled={page === totalPages} className="theme-btn-secondary text-sm disabled:opacity-40">Next</button>
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Filters & Charts */}
-      <div className="flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex gap-2 mb-4">
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => {
-              setFromDate(e.target.value);
-              setPage(1);
-            }}
-            className="border p-2 rounded-md bg-white shadow-inner"
-          />
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => {
-              setToDate(e.target.value);
-              setPage(1);
-            }}
-            className="border p-2 rounded-md bg-white shadow-inner"
-          />
-          <select
-            value={timeFilter}
-            onChange={(e) =>
-              setTimeFilter(e.target.value)
-            }
-            className="border p-2 rounded-md bg-white shadow-inner"
-          >
+      <SectionCard title="Charts & Filters">
+        <div className="flex flex-wrap gap-2 mb-4">
+          <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(1); }} className="theme-input" />
+          <input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); setPage(1); }} className="theme-input" />
+          <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="theme-select">
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
@@ -383,48 +321,27 @@ export default function OrderReportAdvanced() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-          <div className="bg-white/70 backdrop-blur-md border border-blue-300 p-4 rounded-xl shadow-lg">
-            <h3 className="font-bold mb-2 text-blue-700">
-              Earnings Over Time
-            </h3>
-            {chartData.labels?.length > 0 ? (
-              <Bar data={chartData} />
-            ) : (
-              <p className="text-gray-500">No data</p>
-            )}
+          <div className="theme-card-inner p-4 rounded-xl">
+            <h3 className="font-semibold mb-2 theme-page-title">Earnings Over Time</h3>
+            {chartData.labels?.length > 0 ? <Bar data={chartData} /> : <p className="theme-page-muted">No data</p>}
           </div>
-          <div className="bg-white/70 backdrop-blur-md border border-blue-300 p-4 rounded-xl shadow-lg">
-            <h3 className="font-bold mb-2 text-blue-700">
-              Earnings by Category
-            </h3>
-            {categoryData.labels?.length > 0 ? (
-              <Pie data={categoryData} />
-            ) : (
-              <p className="text-gray-500">No data</p>
-            )}
+          <div className="theme-card-inner p-4 rounded-xl">
+            <h3 className="font-semibold mb-2 theme-page-title">Earnings by Category</h3>
+            {categoryData.labels?.length > 0 ? <Pie data={categoryData} /> : <p className="theme-page-muted">No data</p>}
           </div>
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Top 5 Products */}
-      <div className="bg-white/70 backdrop-blur-md border border-green-300 p-4 rounded-2xl shadow-lg">
-        <h3 className="font-bold text-lg mb-4 text-green-700">
-          Top 5 Best Earning Products
-        </h3>
+      <SectionCard title="Top 5 Best Earning Products">
         <ol className="list-decimal list-inside space-y-1">
           {topProducts.map((p) => (
-            <li key={p.name} className="font-semibold">
-              {p.name} - PKR{" "}
-              {p.total.toLocaleString()}
+            <li key={p.name} className="font-semibold theme-page-title">
+              {p.name} — <span className="theme-highlight">PKR {p.total.toLocaleString()}</span>
             </li>
           ))}
-          {topProducts.length === 0 && (
-            <p className="text-gray-500">
-              No products sold yet
-            </p>
-          )}
+          {topProducts.length === 0 && <p className="theme-page-muted">No products sold yet</p>}
         </ol>
-      </div>
-    </div>
+      </SectionCard>
+    </PageShell>
   );
 }

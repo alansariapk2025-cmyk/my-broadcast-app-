@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { collection, collectionGroup, getDocs, updateDoc, doc, serverTimestamp, query, orderBy, limit, startAfter } from "firebase/firestore";
 import { db } from "../firebase";
 import { FaSearch, FaSave, FaSync, FaCheckCircle, FaTimes, FaChevronDown, FaChevronLeft, FaChevronRight, FaLock, FaFilter, FaFileExcel, FaFileImport, FaDownload, FaSortAmountDown, FaSortAmountUp, FaPercent, FaCalculator } from "react-icons/fa";
+import PageShell, { SectionCard } from "./ui/PageShell";
 import toast, { Toaster } from "react-hot-toast";
 import * as Excel from "exceljs";
 import { saveAs } from "file-saver";
@@ -433,80 +434,58 @@ export default function PriceManagement() {
   return (
     <>
       <Toaster position="top-right" />
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 sm:p-6">
-        <div className="mb-6 p-5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                <PKRIcon className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  Price Management
-                </h1>
-                <p className="text-gray-500 text-sm">
-                  {stats.total} loaded • {stats.pending} pending • {stats.saved} saved
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button onClick={handleRefresh} className="p-2.5 bg-white/80 hover:bg-white rounded-xl shadow transition">
-                <FaSync className={`w-4 h-4 text-blue-600 ${loading ? "animate-spin" : ""}`} />
+      <PageShell
+        title="Price Management"
+        subtitle={`${stats.total} loaded • ${stats.pending} pending • ${stats.saved} saved`}
+        icon={PKRIcon}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={handleRefresh} className="theme-btn-secondary p-2.5">
+              <FaSync className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <button type="button" onClick={() => setShowFilters(!showFilters)} className={showFilters ? "theme-btn-primary" : "theme-btn-secondary"}>
+              <FaFilter className="w-4 h-4" /> Filters
+            </button>
+            <button type="button" onClick={() => exportData("filtered")} className="theme-btn-primary">
+              <FaFileExcel className="w-4 h-4" /> Export
+            </button>
+            <button type="button" onClick={() => setShowImport(true)} className="theme-btn-secondary">
+              <FaFileImport className="w-4 h-4" /> Import
+            </button>
+            {stats.pending > 0 && (
+              <button type="button" onClick={clearAll} className="theme-btn-danger">
+                <FaTimes className="w-4 h-4" /> Clear ({stats.pending})
               </button>
-
-              <button onClick={() => setShowFilters(!showFilters)} className={`px-4 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition ${showFilters ? "bg-blue-500 text-white" : "bg-white/80 hover:bg-white"}`}>
-                <FaFilter className="w-4 h-4" /> Filters
-              </button>
-
-              <button onClick={() => exportData("filtered")} className="px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-semibold flex items-center gap-2 shadow hover:shadow-lg transition">
-                <FaFileExcel className="w-4 h-4" /> Export
-              </button>
-
-              <button onClick={() => setShowImport(true)} className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-semibold flex items-center gap-2 shadow hover:shadow-lg transition">
-                <FaFileImport className="w-4 h-4" /> Import
-              </button>
-
-              {stats.pending > 0 && (
-                <button onClick={clearAll} className="px-4 py-2.5 bg-red-50 text-red-600 rounded-xl font-semibold hover:bg-red-100">
-                  <FaTimes className="inline w-4 h-4 mr-1" /> Clear ({stats.pending})
-                </button>
-              )}
-            </div>
+            )}
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+        }
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
           {[
-            { label: "Loaded", value: stats.total, color: "from-blue-500 to-blue-600", icon: "📦" },
-            { label: "Filtered", value: stats.filtered, color: "from-indigo-500 to-indigo-600", icon: "🔍" },
-            { label: "Pending", value: stats.pending, color: "from-yellow-500 to-orange-500", icon: "⏳" },
-            { label: "Saved", value: stats.saved, color: "from-green-500 to-emerald-500", icon: "✅" },
-            { label: "Active", value: stats.active, color: "from-emerald-500 to-green-600", icon: "🟢" },
-            { label: "Inactive", value: stats.inactive, color: "from-rose-500 to-red-600", icon: "🔴" },
-          ].map((s, i) => (
-            <div key={i} className="p-4 rounded-xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-500 font-medium">{s.label}</p>
-                  <p className={`text-2xl font-bold bg-gradient-to-r ${s.color} bg-clip-text text-transparent`}>{s.value}</p>
-                </div>
-                <span className="text-2xl">{s.icon}</span>
-              </div>
+            { label: "Loaded", value: stats.total },
+            { label: "Filtered", value: stats.filtered },
+            { label: "Pending", value: stats.pending },
+            { label: "Saved", value: stats.saved },
+            { label: "Active", value: stats.active },
+            { label: "Inactive", value: stats.inactive },
+          ].map((s) => (
+            <div key={s.label} className="stat-card p-4">
+              <p className="text-xs theme-page-muted font-medium">{s.label}</p>
+              <p className="text-2xl font-bold theme-highlight">{s.value}</p>
             </div>
           ))}
         </div>
 
-        <div className="p-4 rounded-xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-lg mb-4">
+        <SectionCard title="Search Products">
           <div className="flex flex-wrap gap-3 items-center">
             <div className="flex-1 min-w-[200px] relative">
-              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 theme-page-muted" />
               <input
                 type="text"
                 placeholder="Search in loaded products..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-10 py-2.5 bg-white/80 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition"
+                className="theme-input w-full pl-10 pr-10 py-2.5"
               />
               {search && (
                 <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -515,7 +494,7 @@ export default function PriceManagement() {
               )}
             </div>
 
-            <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="p-2.5 bg-white/80 border rounded-xl text-sm">
+            <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="theme-select">
               <option value="">All Categories</option>
               {mainCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -532,7 +511,7 @@ export default function PriceManagement() {
               ))}
             </div>
 
-            <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="p-2.5 bg-white/80 border rounded-xl text-sm">
+            <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="theme-select">
               <option value={10}>10/page</option>
               <option value={25}>25/page</option>
               <option value={50}>50/page</option>
@@ -546,20 +525,20 @@ export default function PriceManagement() {
 
           {showFilters && (
             <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)} className="p-2.5 bg-white/80 border rounded-xl text-sm">
+              <select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)} className="theme-select">
                 <option value="all">All Prices</option>
                 <option value="low">Under PKR 500</option>
                 <option value="medium">PKR 500-2000</option>
                 <option value="high">Above PKR 2000</option>
               </select>
 
-              <select value={changeFilter} onChange={(e) => setChangeFilter(e.target.value)} className="p-2.5 bg-white/80 border rounded-xl text-sm">
+              <select value={changeFilter} onChange={(e) => setChangeFilter(e.target.value)} className="theme-select">
                 <option value="all">All Changed Status</option>
                 <option value="changed">Price Changed</option>
                 <option value="unchanged">Unchanged</option>
               </select>
 
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="p-2.5 bg-white/80 border rounded-xl text-sm">
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="theme-select">
                 <option value="createdAt">Newest</option>
                 <option value="price">Price</option>
                 <option value="margin">Margin</option>
@@ -581,12 +560,12 @@ export default function PriceManagement() {
               </button>
             </div>
           )}
-        </div>
+        </SectionCard>
 
-        <div className="rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl overflow-hidden">
+        <div className="theme-table-wrap">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white">
+              <thead>
                 <tr>
                   <th className="p-3 text-center w-14">S.No</th>
                   <th className="p-3 text-left">Product</th>
@@ -773,25 +752,25 @@ export default function PriceManagement() {
         </div>
 
         {stats.pending > 0 && (
-          <div className="fixed bottom-6 right-6 px-4 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl shadow-2xl flex items-center gap-3 animate-bounce">
-            <span className="font-bold">⚠️ {stats.pending} unsaved</span>
+          <div className="fixed bottom-6 right-6 px-4 py-3 theme-stat-accent shadow-2xl flex items-center gap-3">
+            <span className="font-bold">{stats.pending} unsaved changes</span>
           </div>
         )}
 
         {showImport && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><FaFileImport className="text-purple-500" /> Import Prices</h3>
-              <div className="p-3 bg-blue-50 rounded-xl text-sm text-blue-700 mb-4">Upload Excel with <b>SKU</b> and <b>New Price</b> columns</div>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="w-full p-3 border-2 border-dashed rounded-xl mb-4" />
+            <div className="theme-card theme-glass w-full max-w-md p-6">
+              <h3 className="text-xl font-bold mb-4 theme-page-title flex items-center gap-2"><FaFileImport className="text-blue-500" /> Import Prices</h3>
+              <div className="p-3 theme-card-inner rounded-xl text-sm theme-page-muted mb-4">Upload Excel with <b>SKU</b> and <b>New Price</b> columns</div>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="theme-input w-full mb-4 border-dashed" />
               <div className="flex gap-2">
-                <button onClick={downloadTemplate} className="flex-1 py-2.5 bg-purple-100 text-purple-700 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-purple-200"><FaDownload /> Template</button>
-                <button onClick={() => setShowImport(false)} className="px-6 py-2.5 bg-gray-100 rounded-xl font-semibold hover:bg-gray-200">Cancel</button>
+                <button type="button" onClick={downloadTemplate} className="theme-btn-secondary flex-1"><FaDownload /> Template</button>
+                <button type="button" onClick={() => setShowImport(false)} className="theme-btn-primary">Cancel</button>
               </div>
             </div>
           </div>
         )}
-      </div>
+      </PageShell>
     </>
   );
 }

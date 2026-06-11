@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { db, auth } from "../firebase";
 import {
   collection,
@@ -10,86 +10,126 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { logActivity, ACTIONS } from "../utils/activityLogger";
-import { FaLock } from "react-icons/fa";
+import { FaLock, FaTags } from "react-icons/fa";
+import { Search, RefreshCw } from "lucide-react";
+import PageShell, { SectionCard, FormField } from "./ui/PageShell";
+import { useShop } from "../contexts/ShopContext";
+import { useAuth } from "../contexts/AuthContext";
+import { loadShopCategories, loadAllCategoriesWithShop } from "../utils/categoryLoader";
+import { KNOWN_SHOP_NAMES, resolveShopDisplayName, PRIMARY_SHOP_NAME, PRIMARY_SHOP_ID } from "../constants/shops";
+import { repairPrimaryShopFull } from "../utils/repairPrimaryShop";
+import notify from "../utils/notify";
 
 const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY || "";
 
 export default function AddCategory({ assignedShopId = null, isStaff = false }) {
+  const { shops: ctxShops, effectiveShopId } = useShop();
+  const { isSuperAdmin, assignedShopName } = useAuth();
   const [shops, setShops] = useState([]);
   const [shopId, setShopId] = useState("");
+  const [filterShopId, setFilterShopId] = useState("");
   const [categories, setCategories] = useState([]);
+  const [search, setSearch] = useState("");
 
   const [catName, setCatName] = useState("");
   const [catImageFile, setCatImageFile] = useState(null);
   const [parentForNew, setParentForNew] = useState("");
   const [editingCat, setEditingCat] = useState(null);
-
-  // ✅ New fields
   const [isPopular, setIsPopular] = useState(false);
   const [isReselling, setIsReselling] = useState(false);
-  const [isActive, setIsActive] = useState(true); // Enable/Disable Category
-
-  const [expandedCategoryId, setExpandedCategoryId] = useState(null);
+  const [isActive, setIsActive] = useState(true);
+  const [expandedCategoryKey, setExpandedCategoryKey] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // 🔹 Load Shops
   useEffect(() => {
     const loadShops = async () => {
       try {
         const snap = await getDocs(collection(db, "shops"));
         const s = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setShops(s);
-        if (s.length === 1) setShopId(s[0].id);
-      } catch (err) {
-        console.warn("Failed to load shops:", err);
+        setShops(s.length ? s : [{ id: PRIMARY_SHOP_ID, name: PRIMARY_SHOP_NAME, status: "active" }, ...ctxShops]);
+        if (s.length === 1 && !isStaff) setShopId(s[0].id);
+      } catch {
+        setShops(ctxShops);
       }
     };
     loadShops();
-  }, []);
+  }, [ctxShops, isStaff]);
 
-  // 🔹 Auto-assign shop for STAFF
   useEffect(() => {
     if (isStaff && assignedShopId) {
       setShopId(assignedShopId);
+      setFilterShopId(assignedShopId);
+    } else if (isSuperAdmin) {
+      setFilterShopId(effectiveShopId || "");
+      if (effectiveShopId && !shopId) setShopId(effectiveShopId);
     }
-  }, [isStaff, assignedShopId]);
+  }, [isStaff, assignedShopId, isSuperAdmin, effectiveShopId]);
 
-  // 🔹 Fetch categories
-  useEffect(() => {
-    if (shopId) fetchCategories();
-  }, [shopId]);
+  const shopNameMap = useMemo(() => {
+    const m = { ...KNOWN_SHOP_NAMES };
+    shops.forEach((s) => { m[s.id] = s.name; });
+    return m;
+  }, [shops]);
 
-  const fetchCategories = async () => {
+  const getShopLabel = (shopId, fallback) =>
+    resolveShopDisplayName(shopId, shopNameMap, fallback);
+
+  const fetchListCategories = useCallback(async () => {
     setLoading(true);
     try {
-      const snap = await getDocs(collection(db, "shops", shopId, "categories"));
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setCategories(list);
+      if (isStaff && assignedShopId) {
+        const list = await loadShopCategories(assignedShopId);
+        setCategories(list.map((c) => ({ ...c, shopId: assignedShopId })));
+        return;
+      }
+      if (filterShopId) {
+        const list = await loadShopCategories(filterShopId);
+        setCategories(list.map((c) => ({ ...c, shopId: c.shopId || filterShopId })));
+        return;
+      }
+      const shopList = shops.length ? shops : ctxShops;
+      const nameMap = { ...KNOWN_SHOP_NAMES };
+      shopList.forEach((s) => { nameMap[s.id] = s.name || nameMap[s.id]; });
+      const all = await loadAllCategoriesWithShop(nameMap);
+      setCategories(all);
     } catch (err) {
       console.warn("Failed to load categories:", err);
+      notify.error("Failed to load categories");
     } finally {
       setLoading(false);
     }
-  };
+  }, [isStaff, assignedShopId, filterShopId, shops, ctxShops]);
 
-  // 🔹 Upload to IMGBB
+  useEffect(() => {
+    if (shops.length || ctxShops.length || isStaff) fetchListCategories();
+  }, [fetchListCategories, shops.length, ctxShops.length, isStaff]);
+
+  const filteredList = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => (c.name || "").toLowerCase().includes(q));
+  }, [categories, search]);
+
+  const stats = useMemo(() => ({
+    total: filteredList.length,
+    main: filteredList.filter((c) => !c.parentId).length,
+    sub: filteredList.filter((c) => c.parentId).length,
+    active: filteredList.filter((c) => c.isActive !== false).length,
+  }), [filteredList]);
+
   const uploadToImgbb = async (file) => {
     if (!file) return null;
     const form = new FormData();
     form.append("image", file);
-    const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, {
-      method: "POST",
-      body: form,
-    });
+    const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: "POST", body: form });
     const data = await res.json();
     return data?.data?.url || null;
   };
 
-  // 🔹 Add or Update Category
   const handleAddOrUpdateCategory = async (e) => {
     e.preventDefault();
-    if (!shopId) return alert("Select shop first.");
-    if (!catName.trim()) return alert("Category name required.");
+    if (!shopId) return notify.warning("Select shop first.");
+    if (!catName.trim()) return notify.warning("Category name required.");
 
     setLoading(true);
     try {
@@ -97,7 +137,7 @@ export default function AddCategory({ assignedShopId = null, isStaff = false }) 
       if (catImageFile) {
         const uploaded = await uploadToImgbb(catImageFile);
         if (!uploaded) {
-          alert("Image upload failed.");
+          notify.error("Image upload failed.");
           setLoading(false);
           return;
         }
@@ -111,20 +151,24 @@ export default function AddCategory({ assignedShopId = null, isStaff = false }) 
         isPopular,
         isReselling,
         isActive,
+        shopId: targetShopId,
+        shopName: getShopLabel(targetShopId),
         updatedAt: Timestamp.now(),
       };
 
+      const targetShopId = editingCat?.shopId || shopId;
+
       if (editingCat) {
-        await updateDoc(doc(db, "shops", shopId, "categories", editingCat.id), payload);
+        await updateDoc(doc(db, "shops", targetShopId, "categories", editingCat.id), payload);
         await logActivity({
           userId: auth.currentUser?.uid || "",
           userEmail: auth.currentUser?.email || "",
           userRole: isStaff ? "STAFF" : "SUPER_ADMIN",
           action: ACTIONS.CATEGORY_UPDATE,
           entityName: catName.trim(),
-          shopId,
+          shopId: targetShopId,
         });
-        alert("✅ Category updated successfully!");
+        notify.success("Category updated!");
       } else {
         await addDoc(collection(db, "shops", shopId, "categories"), {
           ...payload,
@@ -138,20 +182,19 @@ export default function AddCategory({ assignedShopId = null, isStaff = false }) 
           entityName: catName.trim(),
           shopId,
         });
-        alert("✅ Category added successfully!");
+        notify.success("Category added!");
       }
 
       resetForm();
-      fetchCategories();
+      fetchListCategories();
     } catch (err) {
       console.error(err);
-      alert("❌ Error saving category.");
+      notify.error("Error saving category.");
     } finally {
       setLoading(false);
     }
   };
 
-  // 🔹 Reset Form
   const resetForm = () => {
     setCatName("");
     setCatImageFile(null);
@@ -162,200 +205,228 @@ export default function AddCategory({ assignedShopId = null, isStaff = false }) 
     setIsActive(true);
   };
 
-  // 🔹 Edit Category
   const handleEditCategory = (cat) => {
+    if (cat.shopId) setShopId(cat.shopId);
     setEditingCat(cat);
     setCatName(cat.name);
     setParentForNew(cat.parentId || "");
     setIsPopular(!!cat.isPopular);
     setIsReselling(!!cat.isReselling);
-    setIsActive(cat.isActive !== false); // Default to true if undefined
+    setIsActive(cat.isActive !== false);
     setCatImageFile(null);
   };
 
-  // 🔹 Delete Category
-  const handleDeleteCategory = async (id) => {
-    if (!confirm("Delete this category?")) return;
+  const handleDeleteCategory = async (cat) => {
+    const id = typeof cat === "string" ? cat : cat.id;
+    const sid = typeof cat === "object" ? cat.shopId : shopId;
+    if (!sid || !window.confirm("Delete this category?")) return;
     try {
-      await deleteDoc(doc(db, "shops", shopId, "categories", id));
-      fetchCategories();
+      await deleteDoc(doc(db, "shops", sid, "categories", id));
+      notify.success("Category deleted");
+      fetchListCategories();
     } catch (err) {
-      console.error("Failed to delete category:", err);
-      alert("❌ Unable to delete category. Check permissions.");
+      console.error(err);
+      notify.error("Unable to delete category.");
     }
   };
-  const toggleExpandCategory = (id) => {
-    setExpandedCategoryId(expandedCategoryId === id ? null : id);
-  };
 
-  const getMainCategories = () => categories.filter((c) => !c.parentId);
-  const getSubcategoriesOf = (pid) => categories.filter((c) => c.parentId === pid);
+  const getMainCategories = () => filteredList.filter((c) => !c.parentId);
+  const getSubcategoriesOf = (pid) => filteredList.filter((c) => c.parentId === pid);
+  const formMainCategories = categories.filter((c) => !c.parentId && (!shopId || c.shopId === shopId));
 
   return (
-    <div className="p-6 bg-white/10 backdrop-blur-md rounded-2xl shadow-xl space-y-6 border border-white/20">
-      <h2 className="text-2xl font-bold text-gray-900">🏷️ Categories & Subcategories</h2>
-
-      {/* 🔹 Shop Selector */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Select Shop</label>
-        {isStaff ? (
-          /* STAFF: locked to assigned shop */
-          <div className="w-full p-3 rounded-xl border-2 border-indigo-200 bg-indigo-50 flex items-center gap-2">
-            <FaLock className="w-4 h-4 text-indigo-500" />
-            <span className="font-semibold text-indigo-700">
-              {shops.find((s) => s.id === shopId)?.name || shopId || "Assigned Shop"}
-            </span>
-            <span className="ml-auto text-xs bg-indigo-200 text-indigo-700 px-2 py-0.5 rounded-full font-bold">LOCKED</span>
-          </div>
-        ) : (
-          /* SUPER_ADMIN: full shop selector */
-          <select
-            value={shopId}
-            onChange={(e) => setShopId(e.target.value)}
-            className="w-full p-3 rounded-xl border border-gray-300 bg-white/30"
-          >
-            <option value="">-- Select Shop --</option>
-            {shops.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {/* 🔹 Form */}
-      <form onSubmit={handleAddOrUpdateCategory} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-          <input
-            value={catName}
-            onChange={(e) => setCatName(e.target.value)}
-            placeholder="Category name"
-            className="w-full p-3 rounded-xl border border-gray-300"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Parent</label>
-          <select
-            value={parentForNew}
-            onChange={(e) => setParentForNew(e.target.value)}
-            className="w-full p-3 rounded-xl border border-gray-300"
-          >
-            <option value="">Main Category</option>
-            {getMainCategories().map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setCatImageFile(e.target.files[0])}
-            className="w-full p-2 rounded-xl border border-gray-300"
-          />
-        </div>
-
-        {/* 🔹 Checkboxes */}
-        <div className="flex gap-6 md:col-span-3 flex-wrap">
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" checked={isPopular} onChange={(e) => setIsPopular(e.target.checked)} />
-            🏆 Most Popular
-          </label>
-
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" checked={isReselling} onChange={(e) => setIsReselling(e.target.checked)} />
-            🔁 Reselling
-          </label>
-
-          <label className="flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200 cursor-pointer">
-            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="cursor-pointer" />
-            {isActive ? "✅ Active" : "❌ Disabled"}
-          </label>
-        </div>
-
-        <div className="md:col-span-3 flex justify-end gap-3 mt-2">
-          {editingCat && (
+    <PageShell
+      title="Categories & Subcategories"
+      subtitle={isStaff ? "Manage categories for your assigned shop" : "All shops by default — filter by shop"}
+      icon={FaTags}
+      actions={
+        <div className="flex gap-2">
+          {isSuperAdmin && !isStaff && (
             <button
               type="button"
-              onClick={resetForm}
-              className="px-4 py-2 rounded-xl border border-gray-400 text-gray-700"
+              onClick={async () => {
+                if (!window.confirm(`Firebase sync: ${PRIMARY_SHOP_NAME}?`)) return;
+                setLoading(true);
+                try {
+                  const r = await repairPrimaryShopFull();
+                  notify.success(`${r.productsUpdated} products, ${r.categoriesUpdated} categories updated`);
+                  fetchListCategories();
+                } catch (e) {
+                  notify.error(e.message);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="theme-btn-primary text-sm"
             >
-              Cancel
+              Sync {PRIMARY_SHOP_NAME}
             </button>
           )}
-          <button
-            type="submit"
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold"
-            disabled={loading}
-          >
-            {editingCat ? "Update Category" : "Add Category"}
+          <button type="button" onClick={fetchListCategories} className="theme-btn-secondary text-sm">
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
           </button>
         </div>
-      </form>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-4">
+        <div className="stat-card p-4"><p className="text-xs theme-page-muted">Total</p><p className="text-2xl font-bold theme-highlight">{stats.total}</p></div>
+        <div className="stat-card p-4"><p className="text-xs theme-page-muted">Main</p><p className="text-2xl font-bold theme-highlight">{stats.main}</p></div>
+        <div className="stat-card p-4"><p className="text-xs theme-page-muted">Sub</p><p className="text-2xl font-bold theme-highlight">{stats.sub}</p></div>
+        <div className="stat-card p-4"><p className="text-xs theme-page-muted">Active</p><p className="text-2xl font-bold theme-highlight">{stats.active}</p></div>
+      </div>
 
-      {/* 🔹 Category List */}
-      {loading ? (
-        <div>Loading...</div>
-      ) : (
-        <div className="grid gap-4">
-          {getMainCategories().map((main) => (
-            <div key={main.id} className="p-4 bg-white/20 rounded-xl border border-white/10">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  {main.image && <img src={main.image} className="w-12 h-12 rounded-lg object-cover" />}
-                  <div>
-                    <div className="font-medium text-gray-900 flex gap-2 items-center flex-wrap">
-                      {main.name}
-                      {main.isPopular && <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded">🏆 Popular</span>}
-                      {main.isReselling && <span className="text-xs bg-green-400 text-black px-2 py-0.5 rounded">🔁 Reselling</span>}
-                      {main.isActive === false && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold border border-red-300">❌ Disabled</span>}
+      <SectionCard title={editingCat ? "Edit Category" : "Add Category"}>
+        <div className="mb-4">
+          <FormField label="Shop for Add/Edit" required>
+            {isStaff ? (
+              <div className="theme-card-inner w-full p-3 flex items-center gap-2">
+                <FaLock className="w-4 h-4 text-blue-500" />
+                <span className="font-semibold theme-page-title">
+                  {getShopLabel(shopId, assignedShopName || PRIMARY_SHOP_NAME)}
+                </span>
+                <span className="ml-auto text-xs theme-badge theme-badge-info">LOCKED</span>
+              </div>
+            ) : (
+              <select value={shopId} onChange={(e) => setShopId(e.target.value)} className="theme-select w-full">
+                <option value="">-- Select Shop --</option>
+                {shops.map((s) => (
+                  <option key={s.id} value={s.id}>{getShopLabel(s.id, s.name)}</option>
+                ))}
+              </select>
+            )}
+          </FormField>
+        </div>
+
+        <form onSubmit={handleAddOrUpdateCategory} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <FormField label="Name" required>
+            <input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="Category name" className="theme-input" />
+          </FormField>
+          <FormField label="Parent">
+            <select value={parentForNew} onChange={(e) => setParentForNew(e.target.value)} className="theme-select">
+              <option value="">Main Category</option>
+              {formMainCategories.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Image">
+            <input type="file" accept="image/*" onChange={(e) => setCatImageFile(e.target.files?.[0])} className="theme-input" />
+          </FormField>
+
+          <div className="flex gap-4 md:col-span-3 flex-wrap">
+            <label className="flex items-center gap-2 text-sm theme-page-title cursor-pointer">
+              <input type="checkbox" checked={isPopular} onChange={(e) => setIsPopular(e.target.checked)} />
+              Popular
+            </label>
+            <label className="flex items-center gap-2 text-sm theme-page-title cursor-pointer">
+              <input type="checkbox" checked={isReselling} onChange={(e) => setIsReselling(e.target.checked)} />
+              Reselling
+            </label>
+            <label className="flex items-center gap-2 text-sm theme-page-title cursor-pointer">
+              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+              {isActive ? "Active" : "Disabled"}
+            </label>
+          </div>
+
+          <div className="md:col-span-3 flex justify-end gap-3">
+            {editingCat && <button type="button" onClick={resetForm} className="theme-btn-secondary">Cancel</button>}
+            <button type="submit" className="theme-btn-primary" disabled={loading}>
+              {editingCat ? "Update Category" : "Add Category"}
+            </button>
+          </div>
+        </form>
+      </SectionCard>
+
+      <SectionCard title="Category List">
+        <div className="flex flex-wrap gap-3 mb-4">
+          {isSuperAdmin && !isStaff && (
+            <select
+              value={filterShopId}
+              onChange={(e) => setFilterShopId(e.target.value)}
+              className="theme-select min-w-[180px]"
+            >
+              <option value="">All Shops</option>
+              {shops.map((s) => (
+                <option key={s.id} value={s.id}>{getShopLabel(s.id, s.name)}</option>
+              ))}
+            </select>
+          )}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-page-muted" />
+            <input
+              type="text"
+              placeholder="Search categories..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="theme-input pl-10"
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="theme-page-muted text-center py-8">Loading...</div>
+        ) : getMainCategories().length === 0 ? (
+          <div className="theme-page-muted text-center py-8">No categories found.</div>
+        ) : (
+          <div className="grid gap-4">
+            {getMainCategories().map((main) => (
+              <div key={`${main.shopId}-${main.id}`} className="theme-card-inner p-4">
+                <div className="flex flex-wrap justify-between items-center gap-3">
+                  <div className="flex items-center gap-4">
+                    {main.image && <img src={main.image} alt="" className="w-12 h-12 rounded-lg object-cover" />}
+                    <div>
+                      <div className="font-medium theme-page-title flex gap-2 items-center flex-wrap">
+                        {main.name}
+                        {!filterShopId && main.shopId && (
+                          <span className="theme-badge theme-badge-info font-bold">{getShopLabel(main.shopId, main.shopName)}</span>
+                        )}
+                        {main.isPopular && <span className="theme-badge theme-badge-warning">Popular</span>}
+                        {main.isReselling && <span className="theme-badge theme-badge-success">Reselling</span>}
+                        {main.isActive === false && <span className="theme-badge theme-badge-danger">Disabled</span>}
+                      </div>
+                      <p className="text-xs theme-page-muted">
+                        Main Category
+                        {!filterShopId && main.shopId && ` · ${getShopLabel(main.shopId, main.shopName)}`}
+                      </p>
                     </div>
-                    <div className="text-xs text-gray-600">Main Category</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setExpandedCategoryKey(expandedCategoryKey === `${main.shopId}-${main.id}` ? null : `${main.shopId}-${main.id}`)} className="theme-btn-secondary text-xs">
+                      {expandedCategoryKey === `${main.shopId}-${main.id}` ? "Hide" : "Subcategories"}
+                    </button>
+                    <button type="button" onClick={() => handleEditCategory(main)} className="theme-btn-secondary text-xs">Edit</button>
+                    <button type="button" onClick={() => handleDeleteCategory(main)} className="theme-btn-danger text-xs">Delete</button>
                   </div>
                 </div>
 
-                <div className="flex gap-3">
-                  <button onClick={() => toggleExpandCategory(main.id)} className="px-3 py-1 rounded-lg border">
-                    {expandedCategoryId === main.id ? "Hide" : "Subcategories"}
-                  </button>
-                  <button onClick={() => handleEditCategory(main)} className="text-blue-600">Edit</button>
-                  <button onClick={() => handleDeleteCategory(main.id)} className="text-red-600">Delete</button>
-                </div>
-              </div>
-
-              {/* 🔹 Subcategories */}
-              {expandedCategoryId === main.id && (
-                <div className="mt-3 ml-10 space-y-2">
-                  {getSubcategoriesOf(main.id).map((sub) => (
-                    <div key={sub.id} className="flex justify-between items-center bg-white/10 p-3 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        {sub.image && <img src={sub.image} className="w-10 h-10 rounded-md object-cover" />}
-                        <div className="font-medium flex gap-2 items-center flex-wrap">
-                          {sub.name}
-                          {sub.isPopular && <span className="text-xs bg-yellow-400 text-black px-2 rounded">🏆</span>}
-                          {sub.isReselling && <span className="text-xs bg-green-400 text-black px-2 rounded">🔁</span>}
-                          {sub.isActive === false && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold border border-red-300">Disabled</span>}
+                {expandedCategoryKey === `${main.shopId}-${main.id}` && (
+                  <div className="mt-3 ml-4 sm:ml-10 space-y-2">
+                    {getSubcategoriesOf(main.id).map((sub) => (
+                      <div key={`${sub.shopId}-${sub.id}`} className="theme-card-inner flex flex-wrap justify-between items-center gap-2 p-3">
+                        <div className="flex items-center gap-3">
+                          {sub.image && <img src={sub.image} alt="" className="w-10 h-10 rounded-md object-cover" />}
+                          <div>
+                            <p className="font-medium theme-page-title flex gap-2 flex-wrap">{sub.name}</p>
+                            {sub.isActive === false && <span className="theme-badge theme-badge-danger text-[10px]">Disabled</span>}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => handleEditCategory(sub)} className="theme-btn-secondary text-xs">Edit</button>
+                          <button type="button" onClick={() => handleDeleteCategory(sub)} className="theme-btn-danger text-xs">Delete</button>
                         </div>
                       </div>
-                      <div className="flex gap-3">
-                        <button onClick={() => handleEditCategory(sub)} className="text-blue-600">Edit</button>
-                        <button onClick={() => handleDeleteCategory(sub.id)} className="text-red-600">Delete</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+                    ))}
+                    {getSubcategoriesOf(main.id).length === 0 && (
+                      <p className="text-xs theme-page-muted py-2">No subcategories.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+    </PageShell>
   );
 }

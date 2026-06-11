@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { db } from "../firebase";
 import {
   collection,
-  onSnapshot,
+  getDocs,
   updateDoc,
   deleteDoc,
   doc,
@@ -28,6 +28,10 @@ import {
 } from "react-icons/fa";
 import * as Excel from "exceljs";
 import { saveAs } from "file-saver";
+import { useShop } from "../contexts/ShopContext";
+import { filterByShop } from "../utils/shopUtils";
+import notify from "../utils/notify";
+import PageShell, { SectionCard } from "./ui/PageShell";
 
 const num = (v) => (typeof v === "number" && !isNaN(v) ? v : Number(v) || 0);
 
@@ -68,7 +72,10 @@ const timeAgo = (ts) => {
 
 const NEW_ORDER_STATUSES = ["Pending", "Placed"];
 
-export default function NewOrders({ onNavigate }) {
+export default function NewOrders({ onNavigate, assignedShopId: propShopId }) {
+  const { effectiveShopId: ctxShopId } = useShop();
+  const effectiveShopId = propShopId || ctxShopId;
+
   const [orders, setOrders] = useState([]);
   const [charges, setCharges] = useState({});
   const [loading, setLoading] = useState(true);
@@ -89,24 +96,28 @@ export default function NewOrders({ onNavigate }) {
     []
   );
 
+  const fetchOrders = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+      const snapshot = await getDocs(q);
+      let ordersData = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (effectiveShopId) ordersData = filterByShop(ordersData, effectiveShopId);
+      setOrders(ordersData);
+    } catch (err) {
+      console.error("Orders fetch error:", err);
+      notify.error("Failed to load new orders");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [effectiveShopId]);
+
   useEffect(() => {
-    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const ordersData = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setOrders(ordersData);
-        setLoading(false);
-        setRefreshing(false);
-      },
-      (err) => {
-        console.error("Orders listener error:", err);
-        setLoading(false);
-        setRefreshing(false);
-      }
-    );
-    return () => unsubscribe();
-  }, []);
+    fetchOrders();
+    const timer = setInterval(() => fetchOrders(true), 60_000);
+    return () => clearInterval(timer);
+  }, [fetchOrders]);
 
   const filtered = useMemo(() => {
     const now = new Date();
@@ -324,42 +335,23 @@ export default function NewOrders({ onNavigate }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-red-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto p-4 sm:p-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-              🔔 New Orders
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Sirf Pending / Placed orders yahan row-wise show honge.
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className={`p-2 rounded-xl bg-white shadow-md hover:shadow-lg transition ${
-                refreshing ? "animate-spin" : ""
-              }`}
-            >
-              <FaSync className="w-5 h-5 text-orange-600" />
-            </button>
-
-            <button
-              onClick={() => onNavigate?.("orders")}
-              className="px-4 py-2 bg-blue-500 text-white rounded-xl font-semibold hover:bg-blue-600 transition"
-            >
-              Main Orders
-            </button>
-          </div>
+    <PageShell
+      title="New Orders"
+      subtitle="Sirf Pending / Placed orders yahan row-wise show honge"
+      icon={FaBell}
+      actions={
+        <div className="flex gap-2">
+          <button type="button" onClick={handleRefresh} disabled={refreshing} className={`theme-btn-secondary p-2.5 ${refreshing ? "animate-spin" : ""}`}>
+            <FaSync className="w-5 h-5" />
+          </button>
+          <button type="button" onClick={() => onNavigate?.("orders")} className="theme-btn-primary">Main Orders</button>
         </div>
-
-        <div className="bg-white rounded-2xl shadow-md p-4 mb-6">
+      }
+    >
+        <div className="theme-card theme-glass p-4">
           <div className="flex flex-wrap gap-3 items-center">
             <div className="flex-1 min-w-[200px] relative">
-              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 theme-page-muted" />
               <input
                 type="text"
                 placeholder="Search new order..."
@@ -368,37 +360,30 @@ export default function NewOrders({ onNavigate }) {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition"
+                className="theme-input w-full pl-10 pr-4 py-2.5"
               />
             </div>
 
             <button
+              type="button"
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition ${
-                showFilters ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
+              className={showFilters ? "theme-btn-primary" : "theme-btn-secondary"}
             >
               <FaFilter className="w-4 h-4" />
               Filters
             </button>
 
-            <button
-              onClick={exportToExcel}
-              className="flex items-center gap-2 px-4 py-2.5 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 transition"
-            >
+            <button type="button" onClick={exportToExcel} className="theme-btn-primary">
               <FaDownload className="w-4 h-4" />
               Export
             </button>
 
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-purple-500 text-white rounded-xl font-semibold hover:bg-purple-600 transition"
-            >
+            <button type="button" onClick={() => setShowImportModal(true)} className="theme-btn-secondary">
               <FaUpload className="w-4 h-4" />
               Import
             </button>
 
-            <div className="px-4 py-2.5 bg-orange-500 text-white rounded-xl font-semibold">
+            <div className="theme-stat-accent px-4 py-2.5 rounded-xl font-semibold text-sm">
               Total New: {filtered.length}
             </div>
           </div>
@@ -407,14 +392,14 @@ export default function NewOrders({ onNavigate }) {
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Time Period</label>
+                  <label className="theme-label text-xs">Time Period</label>
                   <select
                     value={ageFilter}
                     onChange={(e) => {
                       setAgeFilter(e.target.value);
                       setPage(1);
                     }}
-                    className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-500"
+                    className="theme-select w-full"
                   >
                     <option value="all">All Time</option>
                     <option value="1h">Last 1 Hour</option>
@@ -433,7 +418,7 @@ export default function NewOrders({ onNavigate }) {
                       setStartDate(e.target.value);
                       setPage(1);
                     }}
-                    className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-500"
+                    className="theme-select w-full"
                   />
                 </div>
 
@@ -446,7 +431,7 @@ export default function NewOrders({ onNavigate }) {
                       setEndDate(e.target.value);
                       setPage(1);
                     }}
-                    className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-500"
+                    className="theme-select w-full"
                   />
                 </div>
 
@@ -455,7 +440,7 @@ export default function NewOrders({ onNavigate }) {
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-500"
+                    className="theme-select w-full"
                   >
                     <option value="newest">Newest First</option>
                     <option value="oldest">Oldest First</option>
@@ -496,10 +481,10 @@ export default function NewOrders({ onNavigate }) {
         )}
 
         {!loading && current.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-md overflow-hidden mb-6">
+          <div className="theme-table-wrap mb-6">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gradient-to-r from-orange-500 to-red-500 text-white">
+                <thead>
                   <tr>
                     <th className="p-4 text-left font-semibold">Order</th>
                     <th className="p-4 text-left font-semibold">Customer</th>
@@ -829,7 +814,6 @@ export default function NewOrders({ onNavigate }) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 }
