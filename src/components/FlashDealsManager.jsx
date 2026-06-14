@@ -13,7 +13,6 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import { useShop } from "../contexts/ShopContext";
 import {
   FiStar, FiHeart, FiGift, FiShoppingCart, FiShoppingBag,
   FiAward, FiTag, FiCalendar, FiEdit2, FiTrash2, FiPlus, FiX,
@@ -28,7 +27,9 @@ import {
   IoMegaphoneOutline, IoBusinessOutline,
 } from "react-icons/io5";
 
-// Icons Library (React Icons)
+const SHOP_ID = "xKUNJfO0kSZK4yCEhh8s";
+
+// ✅ Icons Library (React Icons)
 const IONICONS_OPTIONS = [
   { name: "flash",        Icon: IoFlashOutline },
   { name: "star",         Icon: FiStar },
@@ -103,9 +104,6 @@ const calcFinalPrice = (product, offerType, offerValue) => {
 // MAIN COMPONENT
 // ============================================================
 export default function FlashDealsManager() {
-  const { effectiveShopId, shops } = useShop();
-  const SHOP_ID = effectiveShopId || shops[0]?.id;
-
   const [sessions, setSessions] = useState([]);
   const [products, setProducts] = useState([]);
   const [editingSession, setEditingSession] = useState(null);
@@ -114,10 +112,6 @@ export default function FlashDealsManager() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!SHOP_ID) {
-      setLoading(false);
-      return;
-    }
     const unsub = onSnapshot(
       query(collection(db, "shops", SHOP_ID, "flashDealSessions"), orderBy("order", "asc")),
       (snap) => {
@@ -127,7 +121,7 @@ export default function FlashDealsManager() {
       (err) => { console.error(err); setLoading(false); }
     );
     return () => unsub();
-  }, [SHOP_ID]);
+  }, []);
 
   useEffect(() => {
     getDocs(collection(db, "products")).then((snap) => {
@@ -213,7 +207,6 @@ export default function FlashDealsManager() {
   return (
     <>
       <style>{globalCSS}</style>
-      <div className="theme-page-root">
       <div style={S.container}>
         {/* HEADER */}
         <div style={S.headerCard}>
@@ -236,8 +229,8 @@ export default function FlashDealsManager() {
         <div style={S.infoBox}>
           <FiInfo size={18} color="#3b82f6" style={{ flexShrink: 0 }} />
           <div>
-            <strong style={{ color: "#93c5fd" }}>How it works: </strong>
-            <span style={{ color: "#cbd5e1" }}>
+            <strong style={{ color: "#1e40af" }}>How it works: </strong>
+            <span style={{ color: "#1e3a8a" }}>
               Create sessions → Add products → Set offers → Set date range → Toggle Active. Real-time updates!
             </span>
           </div>
@@ -245,10 +238,10 @@ export default function FlashDealsManager() {
 
         {/* STATS ROW */}
         <div style={S.statsRow}>
-          <StatCard icon={<FiLayers size={22} color="#fff" />} label="Total Sessions" value={sessions.length} gradient="linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)" />
-          <StatCard icon={<FiCheck size={22} color="#fff" />} label="Active" value={sessions.filter(s => s.active).length} gradient="linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)" />
-          <StatCard icon={<FiPackage size={22} color="#fff" />} label="Total Products" value={sessions.reduce((sum, s) => sum + (s.productIds?.length || 0), 0)} gradient="linear-gradient(135deg, #2563eb 0%, #6366f1 100%)" />
-          <StatCard icon={<FiTag size={22} color="#fff" />} label="Active Offers" value={sessions.reduce((sum, s) => sum + Object.keys(s.offers || {}).length, 0)} gradient="linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%)" />
+          <StatCard icon={<FiLayers size={22} color="#fff" />} label="Total Sessions" value={sessions.length} gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)" />
+          <StatCard icon={<FiCheck size={22} color="#fff" />} label="Active" value={sessions.filter(s => s.active).length} gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)" />
+          <StatCard icon={<FiPackage size={22} color="#fff" />} label="Total Products" value={sessions.reduce((sum, s) => sum + (s.productIds?.length || 0), 0)} gradient="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" />
+          <StatCard icon={<FiTag size={22} color="#fff" />} label="Active Offers" value={sessions.reduce((sum, s) => sum + Object.keys(s.offers || {}).length, 0)} gradient="linear-gradient(135deg, #fa709a 0%, #fee140 100%)" />
         </div>
 
         {/* SESSIONS GRID */}
@@ -289,7 +282,6 @@ export default function FlashDealsManager() {
             onRemoveOffer={(pid) => removeOffer(editingSession.id, pid)}
           />
         )}
-      </div>
       </div>
     </>
   );
@@ -486,16 +478,17 @@ function CreateModal({ onClose, onCreate }) {
 
   return (
     <div style={S.modalBg} onClick={onClose} className="modal-fade-in">
-      <div style={S.modal} onClick={(e) => e.stopPropagation()} className="modal-slide-in flash-deals-modal">
+      <div style={S.modal} onClick={(e) => e.stopPropagation()} className="modal-slide-in">
         <div style={S.modalHeader}>
           <h2 style={S.modalTitle}>
-            <IoSparklesOutline size={22} color="#3b82f6" /> Create New Session
+            <IoSparklesOutline size={22} color="#f59e0b" /> Create New Session
           </h2>
           <button style={S.closeX} onClick={onClose}>
             <FiX size={22} />
           </button>
         </div>
 
+        <div style={{ padding: "0 24px 24px 24px", flex: 1, overflowY: "auto" }}>
         {/* Presets */}
         <div style={S.field}>
           <label style={S.label}>
@@ -505,9 +498,9 @@ function CreateModal({ onClose, onCreate }) {
             {PRESET_THEMES.map((p) => (
               <button
                 key={p.name}
-                style={{ ...S.presetBtn, background: `linear-gradient(135deg, ${p.color}dd, ${p.color}99)` }}
+                style={{ ...S.presetBtn, background: `linear-gradient(135deg, ${p.color}, ${p.color}cc)` }}
                 onClick={() => usePreset(p)}
-                className="btn-hover flash-deals-preset"
+                className="btn-hover"
               >
                 {getIconComponent(p.iconName, 14, "#fff")} {p.name}
               </button>
@@ -524,7 +517,7 @@ function CreateModal({ onClose, onCreate }) {
         <div style={S.field}>
           <label style={S.label}>App Icon:</label>
           <div style={{ position: "relative" }}>
-            <button style={{ ...S.iconDropBtn, borderColor: showIconDD ? "#3b82f6" : "#334155" }} onClick={() => setShowIconDD(!showIconDD)}>
+            <button style={{ ...S.iconDropBtn, borderColor: themeColor }} onClick={() => setShowIconDD(!showIconDD)}>
               <span style={S.iconDropEmoji}>{getIconComponent(iconName, 22, themeColor)}</span>
               <span style={S.iconDropName}>{iconName}</span>
               <FiX size={12} style={{ transform: showIconDD ? "rotate(45deg)" : "none", transition: "transform 0.2s" }} />
@@ -541,8 +534,8 @@ function CreateModal({ onClose, onCreate }) {
                     }}
                     onClick={() => { setIconName(ic.name); setShowIconDD(false); }}
                   >
-                    {getIconComponent(ic.name, 20, iconName === ic.name ? themeColor : "#94a3b8")}
-                    <span style={{ fontSize: 10, color: iconName === ic.name ? "#f1f5f9" : "#64748b", marginTop: 2 }}>{ic.name}</span>
+                    {getIconComponent(ic.name, 20, iconName === ic.name ? themeColor : "#374151")}
+                    <span style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{ic.name}</span>
                   </button>
                 ))}
               </div>
@@ -570,16 +563,16 @@ function CreateModal({ onClose, onCreate }) {
             <input type="datetime-local" style={S.input} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
         </div>
-        <small style={{ color: "#64748b", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
-          <FiInfo size={11} color="#3b82f6" /> Leave empty = always active when toggled ON
+        <small style={{ color: "#6b7280", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+          <FiInfo size={11} /> Leave empty = always active when toggled ON
         </small>
 
         <div style={S.modalActions}>
           <button style={S.cancelBtn} onClick={onClose} className="btn-hover">Cancel</button>
           <button
-            style={S.saveBtn}
+            style={{ ...S.saveBtn, background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
             onClick={() => {
-              if (!name.trim()) return alert("Enter a session name");
+              if (!name.trim()) return alert("⚠️ Enter a session name");
               onCreate({
                 name, iconName, themeColor, subtitle,
                 startDate: startDate ? fromDatetimeLocal(startDate) : null,
@@ -590,6 +583,7 @@ function CreateModal({ onClose, onCreate }) {
           >
             <FiCheck size={16} /> Create Session
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -628,7 +622,7 @@ function EditModal({
 
   return (
     <div style={S.modalBg} onClick={onClose} className="modal-fade-in">
-      <div style={S.modalLarge} onClick={(e) => e.stopPropagation()} className="modal-slide-in flash-deals-modal">
+      <div style={S.modalLarge} onClick={(e) => e.stopPropagation()} className="modal-slide-in">
         <div style={S.modalHeader}>
           <h2 style={S.modalTitle}>
             <span style={{ ...S.sessionIconBox, background: `linear-gradient(135deg, ${themeColor}, ${themeColor}dd)`, width: 36, height: 36 }}>
@@ -639,6 +633,7 @@ function EditModal({
           <button style={S.closeX} onClick={onClose}><FiX size={22} /></button>
         </div>
 
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 24px 24px" }}>
         {/* Tabs */}
         <div style={S.tabBar}>
           {[
@@ -671,7 +666,7 @@ function EditModal({
               <div style={S.field}>
                 <label style={S.label}>App Icon:</label>
                 <div style={{ position: "relative" }}>
-                  <button style={{ ...S.iconDropBtn, borderColor: showIconDD ? "#3b82f6" : "#334155" }} onClick={() => setShowIconDD(!showIconDD)}>
+                  <button style={{ ...S.iconDropBtn, borderColor: themeColor }} onClick={() => setShowIconDD(!showIconDD)}>
                     <span style={S.iconDropEmoji}>{getIconComponent(iconName, 22, themeColor)}</span>
                     <span style={S.iconDropName}>{iconName}</span>
                   </button>
@@ -686,8 +681,8 @@ function EditModal({
                           }}
                           onClick={() => { setIconName(ic.name); setShowIconDD(false); }}
                         >
-                          {getIconComponent(ic.name, 20, iconName === ic.name ? themeColor : "#94a3b8")}
-                          <span style={{ fontSize: 10, color: iconName === ic.name ? "#f1f5f9" : "#64748b", marginTop: 2 }}>{ic.name}</span>
+                          {getIconComponent(ic.name, 20, iconName === ic.name ? themeColor : "#374151")}
+                          <span style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{ic.name}</span>
                         </button>
                       ))}
                     </div>
@@ -723,7 +718,7 @@ function EditModal({
             </div>
 
             <button
-              style={{ ...S.saveBtn, marginTop: 16 }}
+              style={{ ...S.saveBtn, background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)`, marginTop: 16 }}
               onClick={saveInfo}
               className="btn-hover"
             >
@@ -756,8 +751,8 @@ function EditModal({
                       key={p.id}
                       style={{
                         ...S.productRow,
-                        backgroundColor: isSelected ? "#dcfce7" : "#fff",
-                        borderColor: isSelected ? "#16a34a" : "#e5e7eb",
+                        backgroundColor: isSelected ? "rgba(30, 58, 138, 0.4)" : "rgba(30, 41, 59, 0.7)",
+                        borderColor: isSelected ? "rgba(59, 130, 246, 0.5)" : "rgba(59, 130, 246, 0.3)",
                       }}
                       onClick={() => onToggleProduct(p.id)}
                     >
@@ -821,6 +816,7 @@ function EditModal({
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );
@@ -977,20 +973,8 @@ const globalCSS = `
     transition: background 0.15s ease, transform 0.15s ease;
   }
   .product-list-item:hover {
-    background: rgba(59, 130, 246, 0.08) !important;
+    background: rgba(255,255,255,0.95) !important;
     transform: translateX(2px);
-  }
-  .flash-deals-modal input,
-  .flash-deals-modal select,
-  .flash-deals-modal textarea {
-    color-scheme: dark;
-  }
-  .flash-deals-modal input::placeholder {
-    color: #64748b;
-  }
-  .flash-deals-preset:hover {
-    border-color: rgba(59, 130, 246, 0.5) !important;
-    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.2);
   }
   .custom-scroll::-webkit-scrollbar {
     width: 6px;
@@ -1014,7 +998,7 @@ const globalCSS = `
 // ============================================================
 const S = {
   container: {
-    padding: 0,
+    padding: 24,
     background: "transparent",
     minHeight: "auto",
     fontFamily: "'Inter', system-ui, sans-serif",
@@ -1081,7 +1065,7 @@ const S = {
   },
   createBtn: {
     padding: "12px 22px",
-    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+    background: "linear-gradient(135deg, #16a34a, #22c55e)",
     color: "#fff",
     border: "none",
     borderRadius: 12,
@@ -1091,7 +1075,7 @@ const S = {
     display: "flex",
     alignItems: "center",
     gap: 8,
-    boxShadow: "0 8px 20px rgba(37,99,235,0.35)",
+    boxShadow: "0 8px 20px rgba(22,163,74,0.35)",
     transition: "all 0.2s ease",
   },
   // INFO BOX
@@ -1394,13 +1378,14 @@ const S = {
     gridColumn: "1 / -1",
     padding: 60,
     textAlign: "center",
-    background: "rgba(255,255,255,0.6)",
+    background: "rgba(30, 41, 59, 0.5)",
     backdropFilter: "blur(20px)",
     borderRadius: 20,
-    color: "#64748b",
+    color: "#94a3b8",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
+    border: "1px solid rgba(59, 130, 246, 0.2)",
   },
   // MODAL
   modalBg: {
@@ -1416,67 +1401,84 @@ const S = {
     padding: 20,
   },
   modal: {
-    background: "rgba(15, 23, 42, 0.92)",
+    background: "#0f172a",
     backdropFilter: "blur(20px)",
     WebkitBackdropFilter: "blur(20px)",
     borderRadius: 20,
-    padding: 24,
+    padding: 0,
     width: "100%",
     maxWidth: 580,
     maxHeight: "90vh",
-    overflow: "auto",
+    overflow: "hidden",
     boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
     border: "1px solid rgba(59, 130, 246, 0.25)",
+    display: "flex",
+    flexDirection: "column",
   },
   modalLarge: {
-    background: "rgba(15, 23, 42, 0.92)",
+    background: "#0f172a",
     backdropFilter: "blur(20px)",
     WebkitBackdropFilter: "blur(20px)",
     borderRadius: 20,
-    padding: 24,
+    padding: 0,
     width: "100%",
     maxWidth: 980,
     maxHeight: "92vh",
-    overflow: "auto",
+    overflow: "hidden",
     boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
     border: "1px solid rgba(59, 130, 246, 0.25)",
+    display: "flex",
+    flexDirection: "column",
   },
   modalHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 18,
-    paddingBottom: 14,
-    borderBottom: "1px solid rgba(59, 130, 246, 0.15)",
+    padding: 24,
+    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+    borderRadius: "20px 20px 0 0",
+    marginBottom: 0,
+    paddingBottom: 24,
+    borderBottom: "none",
+    boxShadow: "0 4px 20px rgba(37, 99, 235, 0.2)",
   },
   modalTitle: {
     fontSize: 19,
     fontWeight: 800,
-    color: "#f1f5f9",
+    color: "#ffffff",
     margin: 0,
     display: "flex",
     alignItems: "center",
     gap: 10,
   },
   closeX: {
-    background: "rgba(30, 41, 59, 0.8)",
-    border: "1px solid rgba(59, 130, 246, 0.2)",
+    background: "rgba(255, 255, 255, 0.2)",
+    border: "none",
     width: 36,
     height: 36,
     borderRadius: 10,
     cursor: "pointer",
-    color: "#94a3b8",
+    color: "#ffffff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     transition: "all 0.15s",
+    hover: {
+      background: "rgba(255, 255, 255, 0.3)",
+    }
   },
   // TABS
   tabBar: {
     display: "flex",
-    borderBottom: "2px solid rgba(59, 130, 246, 0.15)",
-    marginBottom: 20,
+    background: "rgba(30, 58, 138, 0.5)",
+    borderBottom: "2px solid rgba(59, 130, 246, 0.3)",
+    marginBottom: 0,
     gap: 0,
+    marginLeft: 0,
+    marginRight: 0,
+    paddingLeft: 24,
+    paddingRight: 24,
+    paddingBottom: 0,
   },
   tabBtn: {
     padding: "10px 16px",
@@ -1487,35 +1489,35 @@ const S = {
     fontWeight: 700,
     color: "#94a3b8",
     borderBottom: "2px solid transparent",
-    marginBottom: -2,
+    marginBottom: 0,
     display: "flex",
     alignItems: "center",
     gap: 6,
     transition: "all 0.2s",
   },
-  tabContent: { paddingTop: 8 },
+  tabContent: { padding: "20px 24px 24px 24px", maxHeight: "calc(92vh - 220px)", overflowY: "auto", background: "rgba(15, 23, 42, 0.4)" },
   // FORM
   field: { marginBottom: 14 },
   label: {
     display: "flex",
     alignItems: "center",
     gap: 6,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 700,
-    color: "#94a3b8",
+    color: "#cbd5e1",
     marginBottom: 6,
     textTransform: "uppercase",
-    letterSpacing: "0.5px",
+    letterSpacing: "0.4px",
   },
   input: {
     width: "100%",
     padding: "11px 14px",
-    border: "1px solid #334155",
-    borderRadius: 12,
+    border: "1.5px solid rgba(59, 130, 246, 0.25)",
+    borderRadius: 10,
     fontSize: 14,
     boxSizing: "border-box",
-    background: "#1e293b",
-    color: "#f1f5f9",
+    background: "rgba(15, 23, 42, 0.5)",
+    color: "#e2e8f0",
     transition: "border-color 0.15s, box-shadow 0.15s",
     fontFamily: "inherit",
     outline: "none",
@@ -1525,12 +1527,18 @@ const S = {
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 12,
     marginBottom: 14,
+    padding: "12px",
+    background: "rgba(30, 41, 59, 0.4)",
+    borderRadius: 12,
   },
   dateGrid: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 12,
     marginBottom: 4,
+    padding: "12px",
+    background: "rgba(30, 41, 59, 0.4)",
+    borderRadius: 12,
   },
   presetGrid: {
     display: "grid",
@@ -1540,17 +1548,16 @@ const S = {
   },
   presetBtn: {
     padding: "10px 12px",
-    color: "#f1f5f9",
-    border: "1px solid rgba(59, 130, 246, 0.2)",
-    borderRadius: 12,
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
     cursor: "pointer",
     fontSize: 12,
     fontWeight: 700,
     display: "flex",
     alignItems: "center",
     gap: 6,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-    backdropFilter: "blur(8px)",
+    boxShadow: "0 4px 10px rgba(0,0,0,0.12)",
   },
   // ICON DROPDOWN
   iconDropBtn: {
@@ -1558,39 +1565,37 @@ const S = {
     alignItems: "center",
     gap: 10,
     padding: "10px 14px",
-    border: "1px solid #334155",
-    borderRadius: 12,
+    border: "2px solid #e5e7eb",
+    borderRadius: 10,
     cursor: "pointer",
-    background: "#1e293b",
+    background: "#fff",
     fontSize: 14,
     width: "100%",
-    transition: "border-color 0.15s, box-shadow 0.15s",
-    color: "#f1f5f9",
+    transition: "border-color 0.15s",
   },
   iconDropEmoji: { display: "flex" },
   iconDropName: {
     flex: 1,
     textAlign: "left",
     fontWeight: 600,
-    color: "#f1f5f9",
+    color: "#1e293b",
   },
   iconDropdown: {
     position: "absolute",
     top: "calc(100% + 6px)",
     left: 0,
     right: 0,
-    background: "rgba(15, 23, 42, 0.98)",
-    border: "1px solid rgba(59, 130, 246, 0.25)",
+    background: "#fff",
+    border: "1px solid #e5e7eb",
     borderRadius: 12,
     zIndex: 999,
     maxHeight: 260,
     overflowY: "auto",
-    boxShadow: "0 12px 28px rgba(0,0,0,0.4)",
+    boxShadow: "0 12px 28px rgba(0,0,0,0.15)",
     display: "grid",
     gridTemplateColumns: "repeat(4, 1fr)",
     padding: 6,
     gap: 4,
-    backdropFilter: "blur(16px)",
   },
   iconDropItem: {
     display: "flex",
@@ -1598,11 +1603,11 @@ const S = {
     alignItems: "center",
     gap: 3,
     padding: "10px 6px",
-    border: "1px solid transparent",
+    border: "none",
     cursor: "pointer",
     borderRadius: 8,
     background: "transparent",
-    transition: "background 0.15s, border-color 0.15s",
+    transition: "background 0.15s",
   },
   // PRODUCTS
   searchBox: {
@@ -1610,8 +1615,8 @@ const S = {
     alignItems: "center",
     gap: 10,
     padding: "0 14px",
-    background: "#f8fafc",
-    border: "1.5px solid #e5e7eb",
+    background: "rgba(15, 23, 42, 0.5)",
+    border: "1.5px solid rgba(59, 130, 246, 0.25)",
     borderRadius: 10,
     marginBottom: 12,
   },
@@ -1623,37 +1628,42 @@ const S = {
     fontSize: 14,
     outline: "none",
     fontFamily: "inherit",
+    color: "#e2e8f0",
   },
   productList: {
     maxHeight: 440,
     overflowY: "auto",
-    border: "1px solid #e5e7eb",
+    border: "1px solid rgba(59, 130, 246, 0.3)",
     borderRadius: 12,
-    background: "#fff",
+    background: "rgba(15, 23, 42, 0.7)",
+    padding: "8px",
   },
   productRow: {
     display: "flex",
     alignItems: "center",
     gap: 12,
     padding: 12,
-    borderBottom: "1px solid #f3f4f6",
+    borderBottom: "1px solid rgba(59, 130, 246, 0.3)",
     cursor: "pointer",
     transition: "background 0.15s",
+    background: "rgba(30, 41, 59, 0.7)",
+    borderRadius: 8,
   },
   productImg: {
     width: 52,
     height: 52,
     borderRadius: 8,
     objectFit: "cover",
+    border: "1px solid rgba(59, 130, 246, 0.3)",
   },
   productName: {
     fontSize: 13,
     fontWeight: 700,
-    color: "#0f172a",
+    color: "#e2e8f0",
   },
   productPrice: {
     fontSize: 12,
-    color: "#64748b",
+    color: "#cbd5e1",
     marginTop: 3,
   },
   mrpSmall: {
@@ -1663,8 +1673,8 @@ const S = {
   },
   offerTag: {
     marginLeft: 6,
-    background: "#dcfce7",
-    color: "#16a34a",
+    background: "rgba(37, 99, 235, 0.2)",
+    color: "#60a5fa",
     padding: "2px 8px",
     borderRadius: 999,
     fontSize: 10,
@@ -1672,10 +1682,11 @@ const S = {
     display: "inline-flex",
     alignItems: "center",
     gap: 3,
+    border: "1px solid rgba(59, 130, 246, 0.3)",
   },
   selectedBadge: {
     padding: "4px 10px",
-    background: "linear-gradient(135deg, #16a34a, #22c55e)",
+    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
     color: "#fff",
     borderRadius: 999,
     fontSize: 10,
@@ -1683,27 +1694,28 @@ const S = {
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
-    boxShadow: "0 2px 6px rgba(22,163,74,0.3)",
+    boxShadow: "0 2px 6px rgba(37,99,235,0.3)",
   },
   // OFFERS
   offersHeader: {
     marginBottom: 16,
     padding: "10px 14px",
-    background: "rgba(239,246,255,0.7)",
+    background: "rgba(15, 23, 42, 0.5)",
     backdropFilter: "blur(10px)",
     borderRadius: 10,
     display: "flex",
     alignItems: "center",
     gap: 8,
-    border: "1px solid rgba(191,219,254,0.5)",
+    border: "1px solid rgba(59, 130, 246, 0.25)",
+    color: "#cbd5e1",
   },
   offerRow: {
-    background: "#fff",
-    border: "1px solid #e5e7eb",
+    background: "rgba(15, 23, 42, 0.3)",
+    border: "1px solid rgba(59, 130, 246, 0.25)",
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
   },
   offerProductInfo: {
     display: "flex",
@@ -1720,11 +1732,11 @@ const S = {
   offerProductName: {
     fontSize: 14,
     fontWeight: 800,
-    color: "#0f172a",
+    color: "#e2e8f0",
   },
   offerProductPrices: {
     fontSize: 12,
-    color: "#64748b",
+    color: "#cbd5e1",
     marginTop: 2,
   },
   offerTypeRow: {
@@ -1741,6 +1753,8 @@ const S = {
     fontSize: 11,
     fontWeight: 700,
     transition: "all 0.15s",
+    background: "rgba(15, 23, 42, 0.4)",
+    color: "#cbd5e1",
   },
   offerInputRow: {
     display: "flex",
@@ -1755,7 +1769,7 @@ const S = {
     padding: "8px 12px",
     textAlign: "center",
     flexShrink: 0,
-    background: "#fff",
+    background: "rgba(15, 23, 42, 0.4)",
   },
   pricePreviewMrp: {
     fontSize: 10,
@@ -1783,9 +1797,9 @@ const S = {
   },
   removeOfferBtn: {
     padding: "8px 14px",
-    background: "#fee2e2",
-    color: "#dc2626",
-    border: "none",
+    background: "rgba(239, 68, 68, 0.15)",
+    color: "#fca5a5",
+    border: "1px solid rgba(239, 68, 68, 0.3)",
     borderRadius: 8,
     cursor: "pointer",
     fontSize: 12,
@@ -1814,30 +1828,29 @@ const S = {
     justifyContent: "flex-end",
     marginTop: 22,
     paddingTop: 16,
-    borderTop: "1px solid rgba(59, 130, 246, 0.15)",
+    borderTop: "1px solid rgba(59, 130, 246, 0.2)",
   },
   cancelBtn: {
     padding: "11px 22px",
-    background: "rgba(30, 41, 59, 0.8)",
+    background: "rgba(59, 130, 246, 0.1)",
     color: "#cbd5e1",
-    border: "1px solid #334155",
-    borderRadius: 12,
+    border: "1px solid rgba(59, 130, 246, 0.3)",
+    borderRadius: 10,
     cursor: "pointer",
-    fontWeight: 600,
+    fontWeight: 700,
     fontSize: 13,
   },
   saveBtn: {
     padding: "11px 22px",
     color: "#fff",
     border: "none",
-    borderRadius: 12,
+    borderRadius: 10,
     cursor: "pointer",
-    fontWeight: 700,
+    fontWeight: 800,
     fontSize: 13,
     display: "flex",
     alignItems: "center",
     gap: 6,
-    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
-    boxShadow: "0 4px 16px rgba(37, 99, 235, 0.35)",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
   },
 };

@@ -144,6 +144,8 @@ export default function AddCategory({ assignedShopId = null, isStaff = false }) 
         imageUrl = uploaded;
       }
 
+      const targetShopId = editingCat?.shopId || shopId;
+
       const payload = {
         name: catName.trim(),
         image: imageUrl,
@@ -155,8 +157,6 @@ export default function AddCategory({ assignedShopId = null, isStaff = false }) 
         shopName: getShopLabel(targetShopId),
         updatedAt: Timestamp.now(),
       };
-
-      const targetShopId = editingCat?.shopId || shopId;
 
       if (editingCat) {
         await updateDoc(doc(db, "shops", targetShopId, "categories", editingCat.id), payload);
